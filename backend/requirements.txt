@@ -21,3 +21,8 @@ weasyprint>=62.0
 resend
 jinja2
 weasyprint
+cat << 'EOF' >> requirements.txt
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
+EOF

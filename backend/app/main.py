@@ -10,15 +10,23 @@ import os
 import io
 import resend
 
-# Импортиране на рутера за генериране на PDF фактури
+# Импортиране на рутерите
 from routers.invoices import router as invoices_router
+from routers.auth import router as auth_router
 
 # Конфигурация на Resend API
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "re_JQPXCcuy_ECnHS76ZCUJg6XRwBPjc1P3G")
 resend.api_key = RESEND_API_KEY
 
-# Jinja2 среда за генериране на фактури
-templates_dir = os.path.join(os.path.dirname(__file__), "templates")
+# Автоматично намиране на правилния път до папката templates
+current_dir = os.path.dirname(os.path.abspath(__file__))
+possible_template_paths = [
+    os.path.join(current_dir, "templates"),
+    os.path.join(current_dir, "..", "templates"),
+    os.path.join(os.getcwd(), "templates"),
+    os.path.join(os.getcwd(), "backend", "app", "templates"),
+]
+templates_dir = next((p for p in possible_template_paths if os.path.isdir(p)), os.path.join(current_dir, "templates"))
 jinja_env = Environment(loader=FileSystemLoader(templates_dir))
 
 app = FastAPI(title="OPTOM.BG API", version="1.0.0")
@@ -32,8 +40,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Включване на рутера за PDF фактури (/api/v1/invoices)
+# Включване на рутерите
 app.include_router(invoices_router)
+app.include_router(auth_router)
 
 # Модели за продукти
 class Product(BaseModel):
@@ -134,7 +143,7 @@ ORDERS_DB = []
 # Помощна функция за генериране на PDF и изпращане по имейл във фонов режим
 def send_order_confirmation_email(order_record: dict):
     try:
-        # Намиране на пълните данни за артикулите от PRODUCTS_DB
+        # 1. Форматиране на поръчаните артикули
         rendered_items = []
         for it in order_record["items"]:
             prod = next((p for p in PRODUCTS_DB if p.id == it["productId"]), None)
@@ -166,48 +175,52 @@ def send_order_confirmation_email(order_record: dict):
             payment_label = "Веднага (-2% отстъпка)"
             doc_type = "B2B ДДС Фактура - Оригинал"
 
-        context = {
-            "doc_type_label": doc_type,
-            "invoice_number": f"1000{order_record['orderId']}",
-            "issue_date": issue_date.strftime("%d.%m.%Y"),
-            "tax_event_date": issue_date.strftime("%d.%m.%Y"),
-            "payment_terms_label": payment_label,
-            "due_date": due_date.strftime("%d.%m.%Y"),
-            "supplier": {
-                "name": "OPTOM.BG / Официален Дистрибутор",
-                "eik": "206894123",
-                "vat_number": "BG206894123",
-                "address": "гр. София, бул. Цариградско шосе 115",
-                "mol": "Димитър Петров",
-                "iban": "BG80UNCR70001523984512",
-                "bank_name": "УниКредит Булбанк"
-            },
-            "buyer": {
-                "name": order_record["storeName"],
-                "eik": order_record.get("eik") or "Не е посочен",
-                "vat_number": f"BG{order_record['eik']}" if order_record.get("eik") else "Нерегистриран по ЗДДС",
-                "address": order_record["address"],
-                "mol": order_record["storeName"],
-                "email": order_record["invoiceEmail"]
-            },
-            "items": rendered_items,
-            "subtotal": order_record["subtotal"],
-            "discount_percent": 2.0 if payment_term == "immediate" else 0.0,
-            "discount_amount": 0.0,
-            "taxable_base": order_record["subtotal"],
-            "vat_rate": 20.0,
-            "vat_amount": order_record["vat"],
-            "total_due": order_record["total"]
-        }
+        # 2. Опит за генериране на PDF
+        pdf_bytes = None
+        try:
+            context = {
+                "doc_type_label": doc_type,
+                "invoice_number": f"1000{order_record['orderId']}",
+                "issue_date": issue_date.strftime("%d.%m.%Y"),
+                "tax_event_date": issue_date.strftime("%d.%m.%Y"),
+                "payment_terms_label": payment_label,
+                "due_date": due_date.strftime("%d.%m.%Y"),
+                "supplier": {
+                    "name": "OPTOM.BG / Официален Дистрибутор",
+                    "eik": "206894123",
+                    "vat_number": "BG206894123",
+                    "address": "гр. София, бул. Цариградско шосе 115",
+                    "mol": "Димитър Петров",
+                    "iban": "BG80UNCR70001523984512",
+                    "bank_name": "УниКредит Булбанк"
+                },
+                "buyer": {
+                    "name": order_record["storeName"],
+                    "eik": order_record.get("eik") or "Не е посочен",
+                    "vat_number": f"BG{order_record['eik']}" if order_record.get("eik") else "Нерегистриран по ЗДДС",
+                    "address": order_record["address"],
+                    "mol": order_record["storeName"],
+                    "email": order_record["invoiceEmail"]
+                },
+                "items": rendered_items,
+                "subtotal": order_record["subtotal"],
+                "discount_percent": 2.0 if payment_term == "immediate" else 0.0,
+                "discount_amount": 0.0,
+                "taxable_base": order_record["subtotal"],
+                "vat_rate": 20.0,
+                "vat_amount": order_record["vat"],
+                "total_due": order_record["total"]
+            }
 
-        template = jinja_env.get_template("invoice_template.html")
-        rendered_html = template.render(**context)
+            template = jinja_env.get_template("invoice_template.html")
+            rendered_html = template.render(**context)
+            pdf_io = io.BytesIO()
+            HTML(string=rendered_html).write_pdf(pdf_io)
+            pdf_bytes = pdf_io.getvalue()
+        except Exception as pdf_err:
+            print(f"⚠️ Грешка при PDF генерацията: {str(pdf_err)}")
 
-        pdf_io = io.BytesIO()
-        HTML(string=rendered_html).write_pdf(pdf_io)
-        pdf_bytes = pdf_io.getvalue()
-
-        # Изпращане чрез Resend
+        # 3. Изпращане на имейла чрез Resend
         email_params = {
             "from": "OPTOM.BG <onboarding@resend.dev>",
             "to": [order_record["invoiceEmail"]],
@@ -217,7 +230,7 @@ def send_order_confirmation_email(order_record: dict):
                     <h2 style="color: #2563eb;">Здравейте, {order_record['storeName']}!</h2>
                     <p>Вашата поръчка с номер <strong>#{order_record['orderId']}</strong> беше приета успешно в платформата <strong>OPTOM.BG</strong>.</p>
                     
-                    <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0;">
                         <p style="margin: 4px 0;"><strong>Адрес за доставка:</strong> {order_record['address']}</p>
                         <p style="margin: 4px 0;"><strong>Условия на плащане:</strong> {payment_label}</p>
                         <p style="margin: 4px 0;"><strong>Обща стойност с ДДС:</strong> {order_record['total']:.2f} лв.</p>
@@ -228,14 +241,17 @@ def send_order_confirmation_email(order_record: dict):
                     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
                     <small style="color: #64748b;">OPTOM.BG &bull; Платформа за презареждане на търговски обекти</small>
                 </div>
-            """,
-            "attachments": [
+            """
+        }
+
+        if pdf_bytes:
+            email_params["attachments"] = [
                 {
                     "filename": f"Faktura_{order_record['orderId']}.pdf",
                     "content": list(pdf_bytes)
                 }
             ]
-        }
+
         resend.Emails.send(email_params)
         print(f"✅ Успешно изпратен имейл за поръчка #{order_record['orderId']} до {order_record['invoiceEmail']}")
     except Exception as e:
@@ -304,7 +320,7 @@ def create_order(order: CreateOrderRequest, background_tasks: BackgroundTasks):
     }
     ORDERS_DB.insert(0, order_record)
 
-    # Стартираме изпращането на имейл във фонов режим, за да не се бави фронтенд отговорът
+    # Стартираме изпращането на имейл във фонов режим
     background_tasks.add_task(send_order_confirmation_email, order_record)
 
     return {
