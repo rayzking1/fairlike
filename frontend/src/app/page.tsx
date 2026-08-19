@@ -7,6 +7,53 @@ import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Product } from '@/types';
 import { Search, ShoppingBag, Store, Camera, RefreshCw } from 'lucide-react';
 
+const FALLBACK_PRODUCTS: Product[] = [
+  {
+    id: '1',
+    name: 'Шоколад Milka Alpine Milk 100g',
+    category: 'Шоколади',
+    barcode: '7622210286124',
+    supplierName: 'Монделийз България',
+    unitsPerCase: 24,
+    casePrice: 38.40,
+    rrpPrice: 2.29,
+    imageUrl: 'https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80',
+  },
+  {
+    id: '2',
+    name: 'Чипс Chio Паприка 140g',
+    category: 'Снаксове',
+    barcode: '5900547001234',
+    supplierName: 'Интерснак България',
+    unitsPerCase: 18,
+    casePrice: 43.20,
+    rrpPrice: 3.19,
+    imageUrl: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80',
+  },
+  {
+    id: '3',
+    name: 'Енергийна напитка Red Bull 250ml',
+    category: 'Напитки',
+    barcode: '9002490100070',
+    supplierName: 'Ред Бул Дистрибуция',
+    unitsPerCase: 24,
+    casePrice: 48.00,
+    rrpPrice: 2.79,
+    imageUrl: 'https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80',
+  },
+  {
+    id: '4',
+    name: 'Кроасан 7 Days Max Какао 85g',
+    category: 'Сладки изделия',
+    barcode: '5201360521204',
+    supplierName: 'Чипита България',
+    unitsPerCase: 30,
+    casePrice: 36.00,
+    rrpPrice: 1.69,
+    imageUrl: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500&q=80',
+  },
+];
+
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -18,8 +65,10 @@ export default function Home() {
 
   const categories = ['Всички', 'Шоколади', 'Снаксове', 'Напитки', 'Сладки изделия'];
 
-  // Динамично извличане на адреса на бекенда в GitHub Codespaces или локално
   const getApiBaseUrl = () => {
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+    }
     if (typeof window !== 'undefined') {
       const currentHost = window.location.hostname;
       if (currentHost.includes('-3000.app.github.dev')) {
@@ -36,9 +85,12 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setProducts(data);
+      } else {
+        setProducts(FALLBACK_PRODUCTS);
       }
     } catch (err) {
-      console.error('Грешка при зареждане на продуктите от бекенда:', err);
+      console.warn('API не отговаря веднага (може да стартира в Render), зареждане на локален каталог:', err);
+      setProducts(FALLBACK_PRODUCTS);
     } finally {
       setLoading(false);
     }
@@ -115,8 +167,9 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Зареждане на обекта</h1>
-            <p className="text-xs text-neutral-500">Цени на едро без включен ДДС (Свързано с FastAPI)</p>
+            <p className="text-xs text-neutral-500">Цени на едро без включен ДДС</p>
           </div>
+
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {categories.map((c) => (
               <button
@@ -135,7 +188,7 @@ export default function Home() {
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-2 text-neutral-400">
             <RefreshCw className="animate-spin" size={28} />
-            <p className="text-sm">Зареждане на артикули...</p>
+            <p className="text-sm">Зареждане на каталог...</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
