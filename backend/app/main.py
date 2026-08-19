@@ -1,12 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 import uuid
 
 app = FastAPI(title="OPTOM.BG API", version="1.0.0")
 
-# CORS конфигурация за комуникация с фронтенда
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,10 +14,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Модели за данни (Pydantic)
 class Product(BaseModel):
     id: str
-    name: string_name if False else str
+    name: str
     category: str
     barcode: str
     supplierName: str
@@ -42,7 +40,6 @@ class CreateOrderRequest(BaseModel):
     vat: float
     total: float
 
-# Вградена примерна база данни за продукти
 PRODUCTS_DB: List[Product] = [
     Product(
         id="1",
@@ -94,12 +91,10 @@ ORDERS_DB = []
 
 @app.get("/api/products", response_model=List[Product])
 def get_products():
-    """Връща списък с всички налични артикули"""
     return PRODUCTS_DB
 
 @app.get("/api/products/{barcode}", response_model=Product)
 def get_product_by_barcode(barcode: str):
-    """Търсене на продукт по баркод"""
     for p in PRODUCTS_DB:
         if p.barcode == barcode:
             return p
@@ -107,7 +102,6 @@ def get_product_by_barcode(barcode: str):
 
 @app.post("/api/orders")
 def create_order(order: CreateOrderRequest):
-    """Създава нова поръчка и я записва"""
     order_id = str(uuid.uuid4())[:8].upper()
     order_record = {
         "orderId": order_id,
@@ -115,10 +109,9 @@ def create_order(order: CreateOrderRequest):
         "invoiceEmail": order.invoiceEmail,
         "address": order.address,
         "paymentMethod": order.paymentMethod,
-        "items": [item.dict() for item in order.items],
+        "items": [item.model_dump() for item in order.items],
         "total": order.total,
         "status": "pending_delivery",
     }
     ORDERS_DB.append(order_record)
-    print(f"Нова поръчка #{order_id} от {order.storeName} на стойност {order.total:.2f} лв.")
     return {"status": "success", "orderId": order_id, "message": "Поръчката е приета успешно!"}
