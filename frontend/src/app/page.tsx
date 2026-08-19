@@ -3,8 +3,9 @@
 import React, { useState } from 'react';
 import { ProductCard } from '@/components/ProductCard';
 import { CartDrawer } from '@/components/CartDrawer';
+import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Product } from '@/types';
-import { Search, ShoppingBag, Store } from 'lucide-react';
+import { Search, ShoppingBag, Store, Camera } from 'lucide-react';
 
 const SAMPLE_PRODUCTS: Product[] = [
   { id: '1', name: 'Шоколад Milka Alpine Milk 100g', category: 'Шоколади', barcode: '7622210286124', supplierName: 'Монделийз', unitsPerCase: 24, casePrice: 38.40, rrpPrice: 2.29, imageUrl: 'https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80' },
@@ -18,6 +19,7 @@ export default function Home() {
   const [category, setCategory] = useState('Всички');
   const [cart, setCart] = useState<{ [key: string]: number }>({});
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const categories = ['Всички', 'Шоколади', 'Снаксове', 'Напитки', 'Сладки изделия'];
 
@@ -30,6 +32,14 @@ export default function Home() {
       }
       return { ...prev, [id]: next };
     });
+  };
+
+  const handleScanBarcode = (barcode: string) => {
+    setSearch(barcode);
+    const foundProduct = SAMPLE_PRODUCTS.find((p) => p.barcode === barcode);
+    if (foundProduct) {
+      handleUpdate(foundProduct.id, 1);
+    }
   };
 
   const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
@@ -46,10 +56,25 @@ export default function Home() {
             <Store className="h-6 w-6 text-neutral-900" />
             <span className="font-black tracking-tight text-xl">OPTOM.BG</span>
           </div>
-          <div className="flex-1 max-w-md relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-            <input type="text" placeholder="Търси продукт или баркод..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full bg-neutral-100 border-none rounded-lg pl-9 pr-4 py-2 text-sm focus:ring-2 focus:ring-neutral-900 outline-none" />
+
+          <div className="flex-1 max-w-md relative flex items-center">
+            <Search className="absolute left-3 text-neutral-400 pointer-events-none" size={16} />
+            <input
+              type="text"
+              placeholder="Търси продукт или баркод..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-neutral-100 border-none rounded-lg pl-9 pr-10 py-2 text-sm focus:ring-2 focus:ring-neutral-900 outline-none"
+            />
+            <button
+              onClick={() => setIsScannerOpen(true)}
+              className="absolute right-2.5 p-1 text-neutral-500 hover:text-neutral-900 active:scale-95"
+              title="Сканирай баркод с камерата"
+            >
+              <Camera size={18} />
+            </button>
           </div>
+
           <button onClick={() => setIsCartOpen(true)} className="relative p-2 text-neutral-700 hover:text-neutral-900">
             <ShoppingBag size={24} />
             {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-neutral-900 text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{totalItems}</span>}
@@ -77,7 +102,21 @@ export default function Home() {
         </div>
       </main>
 
-      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} cart={cart} products={SAMPLE_PRODUCTS} onUpdateQuantity={handleUpdate} onClearCart={() => setCart({})} />
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={handleScanBarcode}
+      />
+
+      <CartDrawer
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        cart={cart}
+        products={SAMPLE_PRODUCTS}
+        onUpdateQuantity={handleUpdate}
+        onClearCart={() => setCart({})}
+      />
     </div>
   );
 }
+
