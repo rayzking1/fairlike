@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+    background-color: #ffffff;
+    @bottom-center {
+      content: "Страница " counter(page) " от " counter(pages);
+      font-size: 8pt;
+      color: #888888;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: #1e293b; font-size: 9.5pt; line-height: 1.4;
+  }
+  .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  .brand-title { font-size: 20pt; font-weight: 800; color: #0f172a; margin: 0; }
+  .brand-sub { font-size: 8.5pt; color: #64748b; margin-top: 2px; }
+  .doc-badge { text-align: right; }
+  .doc-type { font-size: 16pt; font-weight: 800; color: #2563eb; text-transform: uppercase; margin: 0; }
+  .doc-number { font-size: 11pt; font-weight: 600; color: #334155; margin-top: 2px; }
+  .meta-grid-table {
+    width: 100%; border-collapse: collapse; margin-bottom: 18px;
+    background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+  }
+  .meta-grid-table td { padding: 10px 14px; vertical-align: top; }
+  .meta-title { font-size: 7.5pt; text-transform: uppercase; font-weight: 700; color: #64748b; }
+  .meta-value { font-size: 9.5pt; font-weight: 700; color: #0f172a; margin-top: 2px; }
+  .parties-table { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
+  .parties-table td { width: 50%; vertical-align: top; padding: 12px 14px; border: 1px solid #e2e8f0; }
+  .party-badge {
+    display: inline-block; font-size: 7.5pt; font-weight: 700; text-transform: uppercase;
+    color: #2563eb; background-color: #eff6ff; padding: 2px 6px; border-radius: 4px; margin-bottom: 6px;
+  }
+  .party-name { font-size: 11pt; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+  .party-line { font-size: 8.5pt; color: #475569; margin-bottom: 2px; }
+  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  .items-table th {
+    background-color: #0f172a; color: #ffffff; font-size: 8pt; text-transform: uppercase;
+    padding: 8px 10px; text-align: left;
+  }
+  .items-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 8.5pt; }
+  .items-table tr:nth-child(even) td { background-color: #f8fafc; }
+  .text-center { text-align: center; }
+  .text-right { text-align: right; }
+  .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .terms-box {
+    width: 55%; padding: 12px 14px; background-color: #f8fafc;
+    border: 1px solid #e2e8f0; border-radius: 6px; font-size: 8pt; color: #475569;
+  }
+  .totals-box { width: 100%; border-collapse: collapse; }
+  .totals-box td { padding: 4px 6px; font-size: 8.5pt; }
+  .totals-box td.label { text-align: right; color: #64748b; }
+  .totals-box td.amount { text-align: right; font-weight: 700; color: #0f172a; width: 110px; }
+  .totals-box tr.grand-total td {
+    padding-top: 8px; border-top: 2px solid #0f172a; font-size: 11pt; font-weight: 800;
+  }
+  .totals-box tr.grand-total td.amount { color: #2563eb; }
+  .signatures-table { width: 100%; border-collapse: collapse; margin-top: 35px; page-break-inside: avoid; }
+  .signatures-table td { width: 50%; padding: 0 15px; font-size: 8.5pt; color: #475569; }
+  .sig-line { border-bottom: 1px dashed #94a3b8; height: 35px; margin-bottom: 5px; }
+</style>
+</head>
+<body>
+  <table class="header-table">
+    <tr>
+      <td>
+        <div class="brand-title">OPTOM.BG</div>
+        <div class="brand-sub">B2B Платформа за презареждане на магазини</div>
+      </td>
+      <td class="doc-badge">
+        <div class="doc-type">{{ doc_type_label }}</div>
+        <div class="doc-number">№ {{ invoice_number }}</div>
+      </td>
+    </tr>
+  </table>
+  <table class="meta-grid-table">
+    <tr>
+      <td><div class="meta-title">Дата на издаване</div><div class="meta-value">{{ issue_date }}</div></td>
+      <td><div class="meta-title">Данъчно събитие</div><div class="meta-value">{{ tax_event_date }}</div></td>
+      <td><div class="meta-title">Условия за плащане</div><div class="meta-value">{{ payment_terms_label }}</div></td>
+      <td><div class="meta-title">Падежна дата</div><div class="meta-value" style="color: #dc2626;">{{ due_date }}</div></td>
+    </tr>
+  </table>
+  <table class="parties-table">
+    <tr>
+      <td>
+        <span class="party-badge">Доставчик</span>
+        <div class="party-name">{{ supplier.name }}</div>
+        <div class="party-line"><strong>ЕИК:</strong> {{ supplier.eik }}</div>
+        <div class="party-line"><strong>ДДС №:</strong> {{ supplier.vat_number }}</div>
+        <div class="party-line"><strong>Адрес:</strong> {{ supplier.address }}</div>
+        <div class="party-line"><strong>МОЛ:</strong> {{ supplier.mol }}</div>
+        <div class="party-line"><strong>IBAN:</strong> {{ supplier.iban }} ({{ supplier.bank_name }})</div>
+      </td>
+      <td>
+        <span class="party-badge" style="background-color: #f1f5f9; color: #334155;">Получател / Магазин</span>
+        <div class="party-name">{{ buyer.name }}</div>
+        <div class="party-line"><strong>ЕИК:</strong> {{ buyer.eik }}</div>
+        <div class="party-line"><strong>ДДС №:</strong> {{ buyer.vat_number }}</div>
+        <div class="party-line"><strong>Адрес:</strong> {{ buyer.address }}</div>
+        <div class="party-line"><strong>МОЛ:</strong> {{ buyer.mol }}</div>
+        <div class="party-line"><strong>Имейл:</strong> {{ buyer.email }}</div>
+      </td>
+    </tr>
+  </table>
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 5%;">#</th>
+        <th style="width: 40%;">Артикул / Описание</th>
+        <th class="text-center" style="width: 12%;">Баркод (EAN)</th>
+        <th class="text-center" style="width: 10%;">Количество</th>
+        <th class="text-right" style="width: 15%;">Ед. цена (без ДДС)</th>
+        <th class="text-right" style="width: 18%;">Стойност (лв.)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>
+          <strong>{{ item.name }}</strong>
+          {% if item.pack_details %}<div style="font-size: 7.5pt; color: #64748b;">{{ item.pack_details }}</div>{% endif %}
+        </td>
+        <td class="text-center">{{ item.ean }}</td>
+        <td class="text-center">{{ item.quantity }} {{ item.unit }}</td>
+        <td class="text-right">{{ "%.2f"|format(item.unit_price) }} лв.</td>
+        <td class="text-right"><strong>{{ "%.2f"|format(item.total_price) }} лв.</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <table class="summary-table">
+    <tr>
+      <td class="terms-box">
+        <div style="font-weight: 700; color: #0f172a; margin-bottom: 4px;">Банкови детайли и B2B условия:</div>
+        <div>Плащането се извършва по банкова сметка на доставчика:</div>
+        <div style="margin-top: 3px;"><strong>IBAN:</strong> {{ supplier.iban }} | <strong>BIC:</strong> {{ supplier.bic }}</div>
+        <div style="margin-top: 3px;"><strong>Основание за плащане:</strong> Фактура № {{ invoice_number }}</div>
+        <div style="margin-top: 6px; font-size: 7.5pt; color: #64748b;">
+          * Съгласно Faire B2B условия: Заявката подлежи на 60-дневна гаранция за връщане на непродадени наличности при първоначално зареждане.
+        </div>
+      </td>
+      <td style="width: 5%;"></td>
+      <td style="width: 40%;">
+        <table class="totals-box">
+          <tr>
+            <td class="label">Данъчна основа:</td>
+            <td class="amount">{{ "%.2f"|format(subtotal) }} лв.</td>
+          </tr>
+          {% if discount_amount > 0 %}
+          <tr>
+            <td class="label" style="color: #16a34a;">Отстъпка ({{ discount_percent }}%):</td>
+            <td class="amount" style="color: #16a34a;">-{{ "%.2f"|format(discount_amount) }} лв.</td>
+          </tr>
+          <tr>
+            <td class="label">Основа след отстъпка:</td>
+            <td class="amount">{{ "%.2f"|format(taxable_base) }} лв.</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td class="label">ДДС ({{ vat_rate }}%):</td>
+            <td class="amount">{{ "%.2f"|format(vat_amount) }} лв.</td>
+          </tr>
+          <tr class="grand-total">
+            <td class="label">Общо за плащане:</td>
+            <td class="amount">{{ "%.2f"|format(total_due) }} лв.</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <table class="signatures-table">
+    <tr>
+      <td>
+        <div class="sig-line"></div>
+        <div><strong>Издал:</strong> {{ supplier.mol }} ({{ supplier.name }})</div>
+      </td>
+      <td>
+        <div class="sig-line"></div>
+        <div><strong>Получил:</strong> {{ buyer.mol }} ({{ buyer.name }})</div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
