@@ -20,7 +20,8 @@ export default function AuthModal() {
 
   if (!isAuthOpen) return null;
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "https://fairlike.onrender.com";
+  // Твърдо зададен URL към Render бекенда
+  const backendUrl = "https://fairlike.onrender.com";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,37 +29,24 @@ export default function AuthModal() {
     setLoading(true);
 
     try {
-      if (isLoginView) {
-        const res = await fetch(`${backendUrl}/api/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Грешка при вход");
-        login(data.access_token, data.user);
-        setIsAuthOpen(false);
-      } else {
-        const res = await fetch(`${backendUrl}/api/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email,
-            password,
-            company_name: companyName,
-            eik,
-            address,
-            mol,
-            role,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Грешка при регистрация");
-        login(data.access_token, data.user);
-        setIsAuthOpen(false);
-      }
+      const endpoint = isLoginView ? "/api/auth/login" : "/api/auth/register";
+      const bodyData = isLoginView
+        ? { email, password }
+        : { email, password, company_name: companyName, eik, address, mol, role };
+
+      const res = await fetch(`${backendUrl}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyData),
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Грешка при връзка със сървъра");
+      
+      login(data.access_token, data.user);
+      setIsAuthOpen(false);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Мрежова грешка");
     } finally {
       setLoading(false);
     }
