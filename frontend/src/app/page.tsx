@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ProductCard } from '@/components/ProductCard';
 import { CartDrawer } from '@/components/CartDrawer';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
+import HeaderAuthButton from '@/components/HeaderAuthButton';
 import { Product } from '@/types';
 import { Search, ShoppingBag, Store, Camera, RefreshCw, Layers } from 'lucide-react';
 
@@ -150,25 +151,29 @@ export default function Home() {
             />
             <button
               onClick={() => setIsScannerOpen(true)}
-              className="absolute right-2.5 p-1 text-neutral-500 hover:text-neutral-900 active:scale-95"
+              className="absolute right-2.5 p-1 text-neutral-500 hover:text-neutral-900 active:scale-95 cursor-pointer"
               title="Сканирай баркод с камерата"
             >
               <Camera size={18} />
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Link
               href="/supplier"
-              className="flex items-center gap-1.5 bg-neutral-900 text-white text-xs font-bold px-3 py-2 rounded-xl hover:bg-neutral-800 transition-colors shadow-sm whitespace-nowrap"
+              className="flex items-center gap-1.5 bg-neutral-100 text-neutral-800 border border-neutral-200 text-xs font-bold px-3 py-2 rounded-xl hover:bg-neutral-200 transition-colors shadow-sm whitespace-nowrap"
             >
-              <Layers size={14} className="text-emerald-400" />
+              <Layers size={14} className="text-blue-600" />
               <span>За брандове</span>
             </Link>
 
+            {/* Бутон за Вход / Профил */}
+            <HeaderAuthButton />
+
+            {/* Бутон за Количка */}
             <button
               onClick={() => setIsCartOpen(true)}
-              className="relative p-2 text-neutral-700 hover:text-neutral-900"
+              className="relative p-2 text-neutral-700 hover:text-neutral-900 cursor-pointer"
             >
               <ShoppingBag size={24} />
               {totalItems > 0 && (
@@ -193,7 +198,7 @@ export default function Home() {
               <button
                 key={c}
                 onClick={() => setCategory(c)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
                   category === c ? 'bg-neutral-900 text-white' : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-100'
                 }`}
               >
