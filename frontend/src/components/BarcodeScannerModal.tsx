@@ -11,7 +11,7 @@ interface Props {
 }
 
 export const BarcodeScannerModal: React.FC<Props> = ({ isOpen, onClose, onScan }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,19 +20,27 @@ export const BarcodeScannerModal: React.FC<Props> = ({ isOpen, onClose, onScan }
     const codeReader = new BrowserMultiFormatReader();
     setError(null);
 
-    codeReader
-      .decodeFromVideoDevice(undefined, videoRef.current!, (result, err) => {
-        if (result) {
-          const scannedText = result.getText();
-          // При успешно разпознаване подаваме баркода и затваряме камерата
-          onScan(scannedText);
-          onClose();
+    const startScanning = async () => {
+      try {
+        if (videoRef.current) {
+          await codeReader.decodeFromVideoDevice(
+            undefined,
+            videoRef.current,
+            (result) => {
+              if (result) {
+                onScan(result.getText());
+                onClose();
+              }
+            }
+          );
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error(err);
         setError('Моля, разрешете достъпа до камерата в браузъра.');
-      });
+      }
+    };
+
+    startScanning();
 
     return () => {
       codeReader.reset();
@@ -47,7 +55,7 @@ export const BarcodeScannerModal: React.FC<Props> = ({ isOpen, onClose, onScan }
         <div className="w-full flex items-center justify-between p-4 border-b border-neutral-800">
           <div className="flex items-center gap-2">
             <Camera size={18} className="text-emerald-400" />
-            <span className="font-semibold text-sm">Сканирай баркод от рафта</span>
+            <span className="font-semibold text-sm">Сканирай баркод</span>
           </div>
           <button onClick={onClose} className="text-neutral-400 hover:text-white p-1">
             <X size={20} />
@@ -56,8 +64,6 @@ export const BarcodeScannerModal: React.FC<Props> = ({ isOpen, onClose, onScan }
 
         <div className="relative w-full aspect-square bg-black flex items-center justify-center overflow-hidden">
           <video ref={videoRef} className="w-full h-full object-cover" />
-
-          {/* Визуален целеви правоъгълник */}
           <div className="absolute inset-8 border-2 border-dashed border-emerald-400/80 rounded-lg pointer-events-none flex items-center justify-center">
             <div className="w-full h-0.5 bg-emerald-400/50 animate-pulse"></div>
           </div>
@@ -71,9 +77,7 @@ export const BarcodeScannerModal: React.FC<Props> = ({ isOpen, onClose, onScan }
         </div>
 
         <div className="p-4 text-center">
-          <p className="text-xs text-neutral-400">
-            Насочете камерата към баркода на опаковката
-          </p>
+          <p className="text-xs text-neutral-400">Насочете камерата към баркода на продукта</p>
         </div>
       </div>
     </div>
