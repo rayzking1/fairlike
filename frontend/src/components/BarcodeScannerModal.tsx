@@ -23,8 +23,8 @@ export const BarcodeScannerModal: React.FC<Props> = ({ isOpen, onClose, onScan }
     const startScanning = async () => {
       try {
         if (videoRef.current) {
-          await codeReader.decodeFromVideoDevice(
-            undefined,
+          codeReader.decodeFromVideoDevice(
+            undefined as unknown as string,
             videoRef.current,
             (result) => {
               if (result) {
