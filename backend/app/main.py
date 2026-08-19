@@ -4,6 +4,9 @@ from pydantic import BaseModel
 from typing import List, Optional
 import uuid
 
+# Импортиране на рутера за генериране на PDF фактури
+from routers.invoices import router as invoices_router
+
 app = FastAPI(title="OPTOM.BG API", version="1.0.0")
 
 # CORS настройки за безпроблемна връзка с Vercel и Codespaces
@@ -14,6 +17,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Включване на рутера за PDF фактури (/api/v1/invoices)
+app.include_router(invoices_router)
 
 # Модели за продукти
 class Product(BaseModel):
@@ -111,7 +117,11 @@ PRODUCTS_DB: List[Product] = [
 
 ORDERS_DB = []
 
-# --- ЕНДПОЙНТИ ---
+# --- ЕНДПОЙНТИ ЗА ПРОДУКТИ И ПОРЪЧКИ ---
+
+@app.get("/")
+def root():
+    return {"message": "OPTOM.BG API is running", "docs": "/docs"}
 
 @app.get("/api/products", response_model=List[Product])
 def get_products():
