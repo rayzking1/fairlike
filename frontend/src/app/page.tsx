@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { ProductCard } from '@/components/ProductCard';
 import { CartDrawer } from '@/components/CartDrawer';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Product } from '@/types';
-import { Search, ShoppingBag, Store, Camera, RefreshCw } from 'lucide-react';
+import { Search, ShoppingBag, Store, Camera, RefreshCw, Layers } from 'lucide-react';
 
 const FALLBACK_PRODUCTS: Product[] = [
   {
@@ -14,6 +15,7 @@ const FALLBACK_PRODUCTS: Product[] = [
     category: 'Шоколади',
     barcode: '7622210286124',
     supplierName: 'Монделийз България',
+    supplierMinimum: 50.0,
     unitsPerCase: 24,
     casePrice: 38.40,
     rrpPrice: 2.29,
@@ -25,6 +27,7 @@ const FALLBACK_PRODUCTS: Product[] = [
     category: 'Снаксове',
     barcode: '5900547001234',
     supplierName: 'Интерснак България',
+    supplierMinimum: 50.0,
     unitsPerCase: 18,
     casePrice: 43.20,
     rrpPrice: 3.19,
@@ -36,6 +39,7 @@ const FALLBACK_PRODUCTS: Product[] = [
     category: 'Напитки',
     barcode: '9002490100070',
     supplierName: 'Ред Бул Дистрибуция',
+    supplierMinimum: 80.0,
     unitsPerCase: 24,
     casePrice: 48.00,
     rrpPrice: 2.79,
@@ -47,6 +51,7 @@ const FALLBACK_PRODUCTS: Product[] = [
     category: 'Сладки изделия',
     barcode: '5201360521204',
     supplierName: 'Чипита България',
+    supplierMinimum: 50.0,
     unitsPerCase: 30,
     casePrice: 36.00,
     rrpPrice: 1.69,
@@ -89,7 +94,7 @@ export default function Home() {
         setProducts(FALLBACK_PRODUCTS);
       }
     } catch (err) {
-      console.warn('API не отговаря веднага (може да стартира в Render), зареждане на локален каталог:', err);
+      console.warn('API не отговаря навреме (cold start), зареждане на локален каталог:', err);
       setProducts(FALLBACK_PRODUCTS);
     } finally {
       setLoading(false);
@@ -152,14 +157,27 @@ export default function Home() {
             </button>
           </div>
 
-          <button onClick={() => setIsCartOpen(true)} className="relative p-2 text-neutral-700 hover:text-neutral-900">
-            <ShoppingBag size={24} />
-            {totalItems > 0 && (
-              <span className="absolute -top-1 -right-1 bg-neutral-900 text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                {totalItems}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/supplier"
+              className="hidden sm:flex items-center gap-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-semibold px-3 py-2 rounded-xl transition-colors"
+            >
+              <Layers size={14} />
+              <span>За брандове</span>
+            </Link>
+
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="relative p-2 text-neutral-700 hover:text-neutral-900"
+            >
+              <ShoppingBag size={24} />
+              {totalItems > 0 && (
+                <span className="absolute -top-1 -right-1 bg-neutral-900 text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                  {totalItems}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -167,7 +185,7 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Зареждане на обекта</h1>
-            <p className="text-xs text-neutral-500">Цени на едро без включен ДДС</p>
+            <p className="text-xs text-neutral-500">Цени на едро без включен ДДС | Net 60 условия</p>
           </div>
 
           <div className="flex gap-1.5 overflow-x-auto pb-1">
