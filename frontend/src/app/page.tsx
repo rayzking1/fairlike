@@ -1,20 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ProductCard } from '@/components/ProductCard';
 import { CartDrawer } from '@/components/CartDrawer';
 import { BarcodeScannerModal } from '@/components/BarcodeScannerModal';
 import { Product } from '@/types';
-import { Search, ShoppingBag, Store, Camera } from 'lucide-react';
-
-const SAMPLE_PRODUCTS: Product[] = [
-  { id: '1', name: 'Шоколад Milka Alpine Milk 100g', category: 'Шоколади', barcode: '7622210286124', supplierName: 'Монделийз', unitsPerCase: 24, casePrice: 38.40, rrpPrice: 2.29, imageUrl: 'https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80' },
-  { id: '2', name: 'Чипс Chio Паприка 140g', category: 'Снаксове', barcode: '5900547001234', supplierName: 'Интерснак', unitsPerCase: 18, casePrice: 43.20, rrpPrice: 3.19, imageUrl: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80' },
-  { id: '3', name: 'Енергийна напитка Red Bull 250ml', category: 'Напитки', barcode: '9002490100070', supplierName: 'Ред Бул Дистрибуция', unitsPerCase: 24, casePrice: 48.00, rrpPrice: 2.79, imageUrl: 'https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80' },
-  { id: '4', name: 'Кроасан 7 Days Max Какао 85g', category: 'Сладки изделия', barcode: '5201360521204', supplierName: 'Чипита', unitsPerCase: 30, casePrice: 36.00, rrpPrice: 1.69, imageUrl: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500&q=80' },
-];
+import { Search, ShoppingBag, Store, Camera, RefreshCw } from 'lucide-react';
 
 export default function Home() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('Всички');
   const [cart, setCart] = useState<{ [key: string]: number }>({});
@@ -22,6 +17,36 @@ export default function Home() {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const categories = ['Всички', 'Шоколади', 'Снаксове', 'Напитки', 'Сладки изделия'];
+
+  // Динамично извличане на адреса на бекенда в GitHub Codespaces или локално
+  const getApiBaseUrl = () => {
+    if (typeof window !== 'undefined') {
+      const currentHost = window.location.hostname;
+      if (currentHost.includes('-3000.app.github.dev')) {
+        return `https://${currentHost.replace('-3000.app.github.dev', '-8000.app.github.dev')}`;
+      }
+    }
+    return 'http://127.0.0.1:8000';
+  };
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/products`);
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(data);
+      }
+    } catch (err) {
+      console.error('Грешка при зареждане на продуктите от бекенда:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
   const handleUpdate = (id: string, delta: number) => {
     setCart((prev) => {
@@ -36,14 +61,14 @@ export default function Home() {
 
   const handleScanBarcode = (barcode: string) => {
     setSearch(barcode);
-    const foundProduct = SAMPLE_PRODUCTS.find((p) => p.barcode === barcode);
+    const foundProduct = products.find((p) => p.barcode === barcode);
     if (foundProduct) {
       handleUpdate(foundProduct.id, 1);
     }
   };
 
   const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
-  const filtered = SAMPLE_PRODUCTS.filter((p) =>
+  const filtered = products.filter((p) =>
     (category === 'Всички' || p.category === category) &&
     (p.name.toLowerCase().includes(search.toLowerCase()) || p.barcode.includes(search))
   );
@@ -77,7 +102,11 @@ export default function Home() {
 
           <button onClick={() => setIsCartOpen(true)} className="relative p-2 text-neutral-700 hover:text-neutral-900">
             <ShoppingBag size={24} />
-            {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-neutral-900 text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{totalItems}</span>}
+            {totalItems > 0 && (
+              <span className="absolute -top-1 -right-1 bg-neutral-900 text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                {totalItems}
+              </span>
+            )}
           </button>
         </div>
       </header>
@@ -86,20 +115,35 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Зареждане на обекта</h1>
-            <p className="text-xs text-neutral-500">Цени на едро без включен ДДС</p>
+            <p className="text-xs text-neutral-500">Цени на едро без включен ДДС (Свързано с FastAPI)</p>
           </div>
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {categories.map((c) => (
-              <button key={c} onClick={() => setCategory(c)} className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${category === c ? 'bg-neutral-900 text-white' : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-100'}`}>{c}</button>
+              <button
+                key={c}
+                onClick={() => setCategory(c)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                  category === c ? 'bg-neutral-900 text-white' : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-100'
+                }`}
+              >
+                {c}
+              </button>
             ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filtered.map((p) => (
-            <ProductCard key={p.id} product={p} quantity={cart[p.id] || 0} onUpdateQuantity={handleUpdate} />
-          ))}
-        </div>
+        {loading ? (
+          <div className="py-20 flex flex-col items-center justify-center gap-2 text-neutral-400">
+            <RefreshCw className="animate-spin" size={28} />
+            <p className="text-sm">Зареждане на артикули...</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filtered.map((p) => (
+              <ProductCard key={p.id} product={p} quantity={cart[p.id] || 0} onUpdateQuantity={handleUpdate} />
+            ))}
+          </div>
+        )}
       </main>
 
       <BarcodeScannerModal
@@ -112,11 +156,11 @@ export default function Home() {
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         cart={cart}
-        products={SAMPLE_PRODUCTS}
+        products={products}
         onUpdateQuantity={handleUpdate}
         onClearCart={() => setCart({})}
+        apiBaseUrl={getApiBaseUrl()}
       />
     </div>
   );
 }
-
