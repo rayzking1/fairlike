@@ -4,10 +4,10 @@ export interface Product {
   category: string;
   barcode: string;
   supplierName: string;
-  supplierMinimum?: number; // Минимална сума за поръчка от този бранд (напр. 50 лв.)
+  supplierMinimum?: number;
   unitsPerCase: number;
-  casePrice: float; // цена на едро за цял стек
-  rrpPrice: number;  // препоръчителна цена на дребно за бройка (RRP)
+  casePrice: number;
+  rrpPrice: number;
   imageUrl: string;
 }
 
