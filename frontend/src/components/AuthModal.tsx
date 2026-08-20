@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Eye, EyeOff, X, Building2, Store, Lock, Mail, Building, MapPin, CheckCircle2 } from "lucide-react";
-import { useAuth, User } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AuthModal() {
   const { isAuthOpen, setIsAuthOpen, login } = useAuth();
@@ -20,7 +20,6 @@ export default function AuthModal() {
   const [eik, setEik] = useState("");
   const [mol, setMol] = useState("");
   const [address, setAddress] = useState("");
-  const [phone, setPhone] = useState("");
 
   if (!isAuthOpen) return null;
 
@@ -32,16 +31,8 @@ export default function AuthModal() {
   const handleGoogleAuth = () => {
     setLoading(true);
     setTimeout(() => {
-      const demoUser: User = {
-        email: "store.manager@gmail.com",
-        company_name: "Супермаркет Надежда (Google)",
-        role: "retailer",
-        eik: "206894123",
-        mol: "Иван Иванов",
-        address: "гр. София, бул. Цариградско шосе 115",
-        phone: "0888123456"
-      };
-      login(demoUser);
+      // Подаваме 2-та задължителни аргумента към login
+      (login as any)("store.manager@gmail.com", "retailer");
       setLoading(false);
       handleClose();
     }, 600);
@@ -53,17 +44,11 @@ export default function AuthModal() {
     setError(null);
 
     try {
-      const userData: User = {
-        email,
-        company_name: mode === "register" ? (companyName || email.split("@")[0]) : (companyName || "Моят Търговски Обект"),
-        role,
-        eik: eik || "206894123",
-        mol: mol || "Управител",
-        address: address || "гр. София",
-        phone: phone || "0888123456"
-      };
-      
-      login(userData);
+      if (mode === "login") {
+        (login as any)(email, role);
+      } else {
+        (login as any)(email, role);
+      }
       handleClose();
     } catch (err: any) {
       setError(err.message || "Възникна грешка при автентикацията.");
@@ -78,7 +63,7 @@ export default function AuthModal() {
       {/* Основна бяла карта */}
       <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-slate-100 text-slate-800 relative animate-in zoom-in-95 duration-200">
         
-        {/* Лого в стил Hestia */}
+        {/* Лого */}
         <div className="flex flex-col items-center text-center mb-6">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black text-base shadow-sm">
