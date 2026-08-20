@@ -1,31 +1,29 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from passlib.context import CryptContext
+from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-from typing import List
+import bcrypt
 import uuid
 
+from database import get_db
+import models
 from schemas.auth import UserRegister, UserLogin, UserOut, TokenResponse, UserRole
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
-# Настройки за сигурност
 SECRET_KEY = "OPTOM_B2B_SECRET_KEY_CHANGE_IN_PRODUCTION"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 дни валидност
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-# Вградена база данни за потребители (в паметта до добавяне на PostgreSQL)
-USERS_DB = []
-
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
@@ -33,7 +31,7 @@ def create_access_token(data: dict) -> str:
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     token = credentials.credentials
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -48,67 +46,78 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     except JWTError:
         raise credentials_exception
 
-    user = next((u for u in USERS_DB if u["id"] == user_id), None)
+    user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
         raise credentials_exception
     return user
 
-def require_role(allowed_role: UserRole):
-    def role_checker(current_user: dict = Depends(get_current_user)):
-        if current_user["role"] != allowed_role:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Нямате права за достъп до този ресурс"
-            )
-        return current_user
-    return role_checker
-
-
 @router.post("/register", response_model=TokenResponse)
-def register(user_in: UserRegister):
-    # Проверка дали имейлът вече съществува
-    if any(u["email"] == user_in.email for u in USERS_DB):
+def register(user_in: UserRegister, db: Session = Depends(get_db)):
+    existing_user = db.query(models.User).filter(models.User.email == user_in.email.lower()).first()
+    if existing_user:
         raise HTTPException(status_code=400, detail="Вече съществува профил с този имейл адрес")
 
-    user_id = str(uuid.uuid4())[:8]
-    user_dict = {
-        "id": user_id,
-        "email": user_in.email,
-        "hashed_password": hash_password(user_in.password),
-        "company_name": user_in.company_name,
-        "eik": user_in.eik,
-        "address": user_in.address,
-        "mol": user_in.mol,
-        "role": user_in.role
-    }
-    USERS_DB.append(user_dict)
+    new_user = models.User(
+        id=str(uuid.uuid4())[:8],
+        email=user_in.email.lower(),
+        hashed_password=hash_password(user_in.password),
+        company_name=user_in.company_name,
+        eik=user_in.eik,
+        address=user_in.address,
+        mol=user_in.mol,
+        role=user_in.role.value
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
 
-    token = create_access_token({"sub": user_id, "role": user_in.role})
+    token = create_access_token({"sub": new_user.id, "role": new_user.role})
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": user_dict
+        "user": {
+            "id": new_user.id,
+            "email": new_user.email,
+            "company_name": new_user.company_name,
+            "eik": new_user.eik,
+            "address": new_user.address,
+            "mol": new_user.mol,
+            "role": new_user.role
+        }
     }
 
-
 @router.post("/login", response_model=TokenResponse)
-def login(credentials: UserLogin):
-    user = next((u for u in USERS_DB if u["email"] == credentials.email), None)
-    if not user or not verify_password(credentials.password, user["hashed_password"]):
+def login(credentials: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == credentials.email.lower()).first()
+    if not user or not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Грешен имейл адрес или парола"
         )
 
-    token = create_access_token({"sub": user["id"], "role": user["role"]})
+    token = create_access_token({"sub": user.id, "role": user.role})
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": user
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "company_name": user.company_name,
+            "eik": user.eik,
+            "address": user.address,
+            "mol": user.mol,
+            "role": user.role
+        }
     }
 
-
 @router.get("/me", response_model=UserOut)
-def get_me(current_user: dict = Depends(get_current_user)):
-    """Връща текущо логнатия профил (за Next.js сесията)"""
-    return current_user
+def get_me(current_user: models.User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "company_name": current_user.company_name,
+        "eik": current_user.eik,
+        "address": current_user.address,
+        "mol": current_user.mol,
+        "role": current_user.role
+    }

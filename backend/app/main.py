@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import date, timedelta
@@ -10,15 +11,79 @@ import os
 import io
 import resend
 
-# Импортиране на рутерите
+import models
+from database import engine, get_db, SessionLocal
 from routers.invoices import router as invoices_router
 from routers.auth import router as auth_router
 
-# Конфигурация на Resend API
+# 1. Автоматично създаване на таблиците в PostgreSQL / SQLite
+models.Base.metadata.create_all(bind=engine)
+
+# 2. Инициализация на каталога, ако базата е празна
+def seed_initial_products():
+    db = SessionLocal()
+    if db.query(models.Product).count() == 0:
+        initial_products = [
+            models.Product(
+                id="1",
+                name="Шоколад Milka Alpine Milk 100g",
+                category="Шоколади",
+                barcode="7622210286124",
+                supplierName="Монделийз България",
+                supplierMinimum=50.0,
+                unitsPerCase=24,
+                casePrice=38.40,
+                rrpPrice=2.29,
+                imageUrl="https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80"
+            ),
+            models.Product(
+                id="2",
+                name="Чипс Chio Паприка 140g",
+                category="Снаксове",
+                barcode="5900547001234",
+                supplierName="Интерснак България",
+                supplierMinimum=50.0,
+                unitsPerCase=18,
+                casePrice=43.20,
+                rrpPrice=3.19,
+                imageUrl="https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80"
+            ),
+            models.Product(
+                id="3",
+                name="Енергийна напитка Red Bull 250ml",
+                category="Напитки",
+                barcode="9002490100070",
+                supplierName="Ред Бул Дистрибуция",
+                supplierMinimum=80.0,
+                unitsPerCase=24,
+                casePrice=48.00,
+                rrpPrice=2.79,
+                imageUrl="https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80"
+            ),
+            models.Product(
+                id="4",
+                name="Кроасан 7 Days Max Какао 85g",
+                category="Сладки изделия",
+                barcode="5201360521204",
+                supplierName="Чипита България",
+                supplierMinimum=50.0,
+                unitsPerCase=30,
+                casePrice=36.00,
+                rrpPrice=1.69,
+                imageUrl="https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500&q=80"
+            ),
+        ]
+        db.add_all(initial_products)
+        db.commit()
+    db.close()
+
+seed_initial_products()
+
+# Конфигурация на Resend
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "re_JQPXCcuy_ECnHS76ZCUJg6XRwBPjc1P3G")
 resend.api_key = RESEND_API_KEY
 
-# Автоматично намиране на правилния път до папката templates
+# Автоматично намиране на пътя до шаблоните
 current_dir = os.path.dirname(os.path.abspath(__file__))
 possible_template_paths = [
     os.path.join(current_dir, "templates"),
@@ -31,7 +96,6 @@ jinja_env = Environment(loader=FileSystemLoader(templates_dir))
 
 app = FastAPI(title="OPTOM.BG API", version="1.0.0")
 
-# CORS настройки за връзка с Vercel и Codespaces
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,12 +104,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Включване на рутерите
 app.include_router(invoices_router)
 app.include_router(auth_router)
 
-# Модели за продукти
-class Product(BaseModel):
+# Pydantic схеми
+class ProductSchema(BaseModel):
     id: str
     name: str
     category: str
@@ -56,6 +119,9 @@ class Product(BaseModel):
     casePrice: float
     rrpPrice: float
     imageUrl: str
+
+    class Config:
+        from_attributes = True
 
 class ProductCreate(BaseModel):
     name: str
@@ -68,8 +134,7 @@ class ProductCreate(BaseModel):
     rrpPrice: float
     imageUrl: Optional[str] = "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80"
 
-# Модели за поръчки
-class OrderItem(BaseModel):
+class OrderItemSchema(BaseModel):
     productId: str
     quantityCases: int
     casePrice: float
@@ -80,88 +145,17 @@ class CreateOrderRequest(BaseModel):
     address: str
     eik: Optional[str] = ""
     paymentTerms: Optional[str] = "net60"
-    items: List[OrderItem]
+    items: List[OrderItemSchema]
     subtotal: float
     vat: float
     total: float
     estimatedProfit: Optional[float] = 0.0
 
-# Примерна база данни с артикули
-PRODUCTS_DB: List[Product] = [
-    Product(
-        id="1",
-        name="Шоколад Milka Alpine Milk 100g",
-        category="Шоколади",
-        barcode="7622210286124",
-        supplierName="Монделийз България",
-        supplierMinimum=50.0,
-        unitsPerCase=24,
-        casePrice=38.40,
-        rrpPrice=2.29,
-        imageUrl="https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80",
-    ),
-    Product(
-        id="2",
-        name="Чипс Chio Паприка 140g",
-        category="Снаксове",
-        barcode="5900547001234",
-        supplierName="Интерснак България",
-        supplierMinimum=50.0,
-        unitsPerCase=18,
-        casePrice=43.20,
-        rrpPrice=3.19,
-        imageUrl="https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80",
-    ),
-    Product(
-        id="3",
-        name="Енергийна напитка Red Bull 250ml",
-        category="Напитки",
-        barcode="9002490100070",
-        supplierName="Ред Бул Дистрибуция",
-        supplierMinimum=80.0,
-        unitsPerCase=24,
-        casePrice=48.00,
-        rrpPrice=2.79,
-        imageUrl="https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80",
-    ),
-    Product(
-        id="4",
-        name="Кроасан 7 Days Max Какао 85g",
-        category="Сладки изделия",
-        barcode="5201360521204",
-        supplierName="Чипита България",
-        supplierMinimum=50.0,
-        unitsPerCase=30,
-        casePrice=36.00,
-        rrpPrice=1.69,
-        imageUrl="https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500&q=80",
-    ),
-]
-
-ORDERS_DB = []
-
-# Помощна функция за генериране на PDF и изпращане по имейл във фонов режим
-def send_order_confirmation_email(order_record: dict):
+# Функция за генериране на PDF и изпращане по имейл
+def send_order_confirmation_email(order_dict: dict, items_data: list):
     try:
-        # 1. Форматиране на поръчаните артикули
-        rendered_items = []
-        for it in order_record["items"]:
-            prod = next((p for p in PRODUCTS_DB if p.id == it["productId"]), None)
-            name = prod.name if prod else f"Артикул #{it['productId']}"
-            ean = prod.barcode if prod else "N/A"
-            pack_details = f"Стек от {prod.unitsPerCase} бр." if prod else ""
-            rendered_items.append({
-                "name": name,
-                "pack_details": pack_details,
-                "ean": ean,
-                "quantity": it["quantityCases"],
-                "unit": "стека",
-                "unit_price": it["casePrice"],
-                "total_price": round(it["quantityCases"] * it["casePrice"], 2)
-            })
-
         issue_date = date.today()
-        payment_term = order_record.get("paymentTerms", "net60")
+        payment_term = order_dict.get("paymentTerms", "net60")
         if payment_term == "net60":
             due_date = issue_date + timedelta(days=60)
             payment_label = "Net 60 дни"
@@ -175,12 +169,11 @@ def send_order_confirmation_email(order_record: dict):
             payment_label = "Веднага (-2% отстъпка)"
             doc_type = "B2B ДДС Фактура - Оригинал"
 
-        # 2. Опит за генериране на PDF
         pdf_bytes = None
         try:
             context = {
                 "doc_type_label": doc_type,
-                "invoice_number": f"1000{order_record['orderId']}",
+                "invoice_number": f"1000{order_dict['id']}",
                 "issue_date": issue_date.strftime("%d.%m.%Y"),
                 "tax_event_date": issue_date.strftime("%d.%m.%Y"),
                 "payment_terms_label": payment_label,
@@ -195,21 +188,21 @@ def send_order_confirmation_email(order_record: dict):
                     "bank_name": "УниКредит Булбанк"
                 },
                 "buyer": {
-                    "name": order_record["storeName"],
-                    "eik": order_record.get("eik") or "Не е посочен",
-                    "vat_number": f"BG{order_record['eik']}" if order_record.get("eik") else "Нерегистриран по ЗДДС",
-                    "address": order_record["address"],
-                    "mol": order_record["storeName"],
-                    "email": order_record["invoiceEmail"]
+                    "name": order_dict["storeName"],
+                    "eik": order_dict.get("eik") or "Не е посочен",
+                    "vat_number": f"BG{order_dict['eik']}" if order_dict.get("eik") else "Нерегистриран по ЗДДС",
+                    "address": order_dict["address"],
+                    "mol": order_dict["storeName"],
+                    "email": order_dict["invoiceEmail"]
                 },
-                "items": rendered_items,
-                "subtotal": order_record["subtotal"],
+                "items": items_data,
+                "subtotal": order_dict["subtotal"],
                 "discount_percent": 2.0 if payment_term == "immediate" else 0.0,
                 "discount_amount": 0.0,
-                "taxable_base": order_record["subtotal"],
+                "taxable_base": order_dict["subtotal"],
                 "vat_rate": 20.0,
-                "vat_amount": order_record["vat"],
-                "total_due": order_record["total"]
+                "vat_amount": order_dict["vat"],
+                "total_due": order_dict["total"]
             }
 
             template = jinja_env.get_template("invoice_template.html")
@@ -220,23 +213,19 @@ def send_order_confirmation_email(order_record: dict):
         except Exception as pdf_err:
             print(f"⚠️ Грешка при PDF генерацията: {str(pdf_err)}")
 
-        # 3. Изпращане на имейла чрез Resend
         email_params = {
             "from": "OPTOM.BG <onboarding@resend.dev>",
-            "to": [order_record["invoiceEmail"]],
-            "subject": f"Потвърждение за поръчка #{order_record['orderId']} - OPTOM.BG",
+            "to": [order_dict["invoiceEmail"]],
+            "subject": f"Потвърждение за поръчка #{order_dict['id']} - OPTOM.BG",
             "html": f"""
                 <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: auto;">
-                    <h2 style="color: #2563eb;">Здравейте, {order_record['storeName']}!</h2>
-                    <p>Вашата поръчка с номер <strong>#{order_record['orderId']}</strong> беше приета успешно в платформата <strong>OPTOM.BG</strong>.</p>
-                    
+                    <h2 style="color: #2563eb;">Здравейте, {order_dict['storeName']}!</h2>
+                    <p>Вашата поръчка с номер <strong>#{order_dict['id']}</strong> беше приета успешно в платформата <strong>OPTOM.BG</strong>.</p>
                     <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0;">
-                        <p style="margin: 4px 0;"><strong>Адрес за доставка:</strong> {order_record['address']}</p>
+                        <p style="margin: 4px 0;"><strong>Адрес за доставка:</strong> {order_dict['address']}</p>
                         <p style="margin: 4px 0;"><strong>Условия на плащане:</strong> {payment_label}</p>
-                        <p style="margin: 4px 0;"><strong>Обща стойност с ДДС:</strong> {order_record['total']:.2f} лв.</p>
-                        <p style="margin: 4px 0; color: #16a34a;"><strong>Прогнозна чиста печалба за магазина:</strong> {order_record.get('estimatedProfit', 0):.2f} лв.</p>
+                        <p style="margin: 4px 0;"><strong>Обща стойност с ДДС:</strong> {order_dict['total']:.2f} лв.</p>
                     </div>
-
                     <p>Оригиналната PDF фактура/проформа е прикачена към този имейл.</p>
                     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
                     <small style="color: #64748b;">OPTOM.BG &bull; Платформа за презареждане на търговски обекти</small>
@@ -247,32 +236,31 @@ def send_order_confirmation_email(order_record: dict):
         if pdf_bytes:
             email_params["attachments"] = [
                 {
-                    "filename": f"Faktura_{order_record['orderId']}.pdf",
+                    "filename": f"Faktura_{order_dict['id']}.pdf",
                     "content": list(pdf_bytes)
                 }
             ]
 
         resend.Emails.send(email_params)
-        print(f"✅ Успешно изпратен имейл за поръчка #{order_record['orderId']} до {order_record['invoiceEmail']}")
+        print(f"✅ Успешно изпратен имейл за поръчка #{order_dict['id']}")
     except Exception as e:
         print(f"❌ Грешка при изпращане на имейл: {str(e)}")
 
-
-# --- ЕНДПОЙНТИ ЗА ПРОДУКТИ И ПОРЪЧКИ ---
+# --- ЕНДПОЙНТИ С БАЗА ДАННИ ---
 
 @app.get("/")
 def root():
-    return {"message": "OPTOM.BG API is running", "docs": "/docs"}
+    return {"message": "OPTOM.BG Database API is running", "docs": "/docs"}
 
-@app.get("/api/products", response_model=List[Product])
-def get_products():
-    """Връща списък с всички налични артикули"""
-    return PRODUCTS_DB
+@app.get("/api/products", response_model=List[ProductSchema])
+def get_products(db: Session = Depends(get_db)):
+    """Връща списък с всички артикули от базата данни"""
+    return db.query(models.Product).order_by(models.Product.name.asc()).all()
 
-@app.post("/api/products", response_model=Product)
-def add_product(item: ProductCreate):
-    """Добавя нов артикул от бранд/дистрибутор"""
-    new_product = Product(
+@app.post("/api/products", response_model=ProductSchema)
+def add_product(item: ProductCreate, db: Session = Depends(get_db)):
+    """Записва нов артикул директно в таблицата products"""
+    new_product = models.Product(
         id=str(uuid.uuid4())[:8],
         name=item.name,
         category=item.category,
@@ -284,47 +272,83 @@ def add_product(item: ProductCreate):
         rrpPrice=item.rrpPrice,
         imageUrl=item.imageUrl or "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80",
     )
-    PRODUCTS_DB.insert(0, new_product)
+    db.add(new_product)
+    db.commit()
+    db.refresh(new_product)
     return new_product
 
-@app.get("/api/products/{barcode}", response_model=Product)
-def get_product_by_barcode(barcode: str):
-    """Търсене на продукт по EAN баркод"""
-    for p in PRODUCTS_DB:
-        if p.barcode == barcode:
-            return p
-    raise HTTPException(status_code=404, detail="Продуктът не е намерен")
+@app.get("/api/products/{barcode}", response_model=ProductSchema)
+def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
+    """Търсене на продукт по баркод в базата"""
+    product = db.query(models.Product).filter(models.Product.barcode == barcode).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Продуктът не е намерен")
+    return product
 
 @app.get("/api/orders")
-def get_orders():
-    """Връща списък с всички входящи поръчки за Brand Dashboard-а"""
-    return ORDERS_DB
+def get_orders(db: Session = Depends(get_db)):
+    """Връща всички поръчки от базата данни за бранд таблото"""
+    return db.query(models.Order).order_by(models.Order.created_at.desc()).all()
 
 @app.post("/api/orders")
-def create_order(order: CreateOrderRequest, background_tasks: BackgroundTasks):
-    """Приема нова поръчка от магазин, записва я и праща имейл с прикачена PDF фактура"""
+def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Записва поръчката и редовете в SQL базата и изпраща фактура по имейл"""
     order_id = str(uuid.uuid4())[:8].upper()
-    order_record = {
-        "orderId": order_id,
-        "storeName": order.storeName,
-        "invoiceEmail": order.invoiceEmail,
-        "address": order.address,
-        "eik": order.eik,
-        "paymentTerms": order.paymentTerms,
-        "items": [item.model_dump() for item in order.items],
-        "subtotal": order.subtotal,
-        "vat": order.vat,
-        "total": order.total,
-        "estimatedProfit": order.estimatedProfit,
-        "status": "pending_delivery",
-    }
-    ORDERS_DB.insert(0, order_record)
+    db_order = models.Order(
+        id=order_id,
+        storeName=order_in.storeName,
+        invoiceEmail=order_in.invoiceEmail,
+        address=order_in.address,
+        eik=order_in.eik,
+        paymentTerms=order_in.paymentTerms,
+        subtotal=order_in.subtotal,
+        vat=order_in.vat,
+        total=order_in.total,
+        estimatedProfit=order_in.estimatedProfit,
+        status="pending_delivery"
+    )
+    db.add(db_order)
 
-    # Стартираме изпращането на имейл във фонов режим
-    background_tasks.add_task(send_order_confirmation_email, order_record)
+    items_data = []
+    for it in order_in.items:
+        db_item = models.OrderItem(
+            order_id=order_id,
+            product_id=it.productId,
+            quantity_cases=it.quantityCases,
+            case_price=it.casePrice
+        )
+        db.add(db_item)
+
+        prod = db.query(models.Product).filter(models.Product.id == it.productId).first()
+        items_data.append({
+            "name": prod.name if prod else f"Артикул #{it.productId}",
+            "pack_details": f"Стек от {prod.unitsPerCase} бр." if prod else "",
+            "ean": prod.barcode if prod else "N/A",
+            "quantity": it.quantityCases,
+            "unit": "стека",
+            "unit_price": it.casePrice,
+            "total_price": round(it.quantityCases * it.casePrice, 2)
+        })
+
+    db.commit()
+    db.refresh(db_order)
+
+    order_dict = {
+        "id": db_order.id,
+        "storeName": db_order.storeName,
+        "invoiceEmail": db_order.invoiceEmail,
+        "address": db_order.address,
+        "eik": db_order.eik,
+        "paymentTerms": db_order.paymentTerms,
+        "subtotal": db_order.subtotal,
+        "vat": db_order.vat,
+        "total": db_order.total,
+    }
+
+    background_tasks.add_task(send_order_confirmation_email, order_dict, items_data)
 
     return {
         "status": "success",
         "orderId": order_id,
-        "message": "Поръчката е приета успешно! Изпратено е потвърждение и PDF фактура на посочения имейл.",
+        "message": "Поръчката е запазена в базата данни и е изпратена фактура по имейл."
     }
