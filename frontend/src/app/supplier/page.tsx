@@ -45,7 +45,7 @@ interface Order {
 }
 
 export default function SupplierDashboard() {
-  const { user, isAuthenticated, setIsAuthOpen } = useAuth();
+  const { user, setIsAuthOpen } = useAuth();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -83,15 +83,15 @@ export default function SupplierDashboard() {
   };
 
   useEffect(() => {
-    if (isAuthenticated && user?.role === "supplier") {
+    if (user && user.role === "supplier") {
       fetchData();
     } else {
       setLoading(false);
     }
-  }, [isAuthenticated, user]);
+  }, [user]);
 
   // 1. Нелогнат потребител
-  if (!isAuthenticated) {
+  if (!user) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-slate-200">
@@ -122,7 +122,7 @@ export default function SupplierDashboard() {
   }
 
   // 2. Логнат като Магазин (retailer)
-  if (user?.role !== "supplier") {
+  if (user.role !== "supplier") {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-slate-200">
@@ -131,7 +131,7 @@ export default function SupplierDashboard() {
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2">Ограничен достъп</h2>
           <p className="text-xs text-slate-500 mb-2">
-            Вие сте влезли с профил на <strong>Магазин / Купувач ({user?.company_name})</strong>.
+            Вие сте влезли с профил на <strong>Магазин / Купувач ({user.company_name})</strong>.
           </p>
           <p className="text-xs text-slate-400 mb-6">
             Само профили с роля <strong>„Бранд / Вносител“</strong> имат права за импорт на артикули и преглед на входящи заявки.
@@ -151,7 +151,6 @@ export default function SupplierDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
-      {/* Топ навигация */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -168,7 +167,7 @@ export default function SupplierDashboard() {
               </div>
               <div>
                 <h1 className="text-sm font-extrabold tracking-tight">Портал за Производители & Дистрибутори</h1>
-                <p className="text-[10px] text-slate-400 font-semibold">{user?.company_name} (ЕИК: {user?.eik})</p>
+                <p className="text-[10px] text-slate-400 font-semibold">{user.company_name} (ЕИК: {user.eik})</p>
               </div>
             </div>
           </div>
@@ -185,7 +184,6 @@ export default function SupplierDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 pt-6 space-y-6">
-        {/* KPI Картодържачи */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
@@ -218,7 +216,6 @@ export default function SupplierDashboard() {
           </div>
         </div>
 
-        {/* Секция: Каталог */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100 flex items-center justify-between">
             <div>
@@ -266,7 +263,6 @@ export default function SupplierDashboard() {
           </div>
         </div>
 
-        {/* Секция: Поръчки */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100">
             <h2 className="text-base font-bold text-slate-900">Входящи заявки за презареждане</h2>
