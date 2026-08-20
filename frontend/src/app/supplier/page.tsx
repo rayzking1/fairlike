@@ -2,18 +2,20 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { 
   Building2, 
   Package, 
   PlusCircle, 
   Upload, 
   Clock, 
-  TrendingUp, 
   DollarSign, 
-  CheckCircle2, 
   ChevronLeft,
-  Truck
+  Truck,
+  ShieldAlert,
+  Lock
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import CsvImportModal from "@/components/CsvImportModal";
 
 interface Product {
@@ -44,6 +46,9 @@ interface Order {
 }
 
 export default function SupplierDashboard() {
+  const { user, isAuthenticated, setIsAuthOpen } = useAuth();
+  const router = useRouter();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -80,8 +85,69 @@ export default function SupplierDashboard() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (isAuthenticated && user?.role === "supplier") {
+      fetchData();
+    } else {
+      setLoading(false);
+    }
+  }, [isAuthenticated, user]);
+
+  // 1. Проверка: Нелогнат потребител
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-slate-200">
+          <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-7 h-7" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">Изисква се вход за дистрибутори</h2>
+          <p className="text-xs text-slate-500 mb-6">
+            Този портал е предназначен само за верифицирани производители и официални вносители.
+          </p>
+          <div className="space-y-2">
+            <button
+              onClick={() => setIsAuthOpen(true)}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
+            >
+              Вход в B2B профил
+            </button>
+            <Link
+              href="/"
+              className="block w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+            >
+              Върни се в магазина
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Проверка: Логнат като Купувач / Магазин (retailer)
+  if (user?.role !== "supplier") {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-slate-200">
+          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <ShieldAlert className="w-7 h-7" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">Ограничен достъп</h2>
+          <p className="text-xs text-slate-500 mb-2">
+            Вие сте влезли с профил на <strong>Магазин / Купувач ({user?.company_name})</strong>.
+          </p>
+          <p className="text-xs text-slate-400 mb-6">
+            Само профили с роля <strong>„Бранд / Вносител“</strong> имат права за импорт на артикули и преглед на входящи заявки.
+          </p>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center gap-2 w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow transition-all"
+          >
+            <ChevronLeft className="w-4 h-4" /> Към каталога за зареждане
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const totalVolume = orders.reduce((sum, o) => sum + o.total, 0);
 
@@ -102,7 +168,10 @@ export default function SupplierDashboard() {
               <div className="bg-blue-600 text-white p-1.5 rounded-lg">
                 <Building2 className="w-5 h-5" />
               </div>
-              <h1 className="text-base font-extrabold tracking-tight">Портал за Производители & Дистрибутори</h1>
+              <div>
+                <h1 className="text-sm font-extrabold tracking-tight">Портал за Производители & Дистрибутори</h1>
+                <p className="text-[10px] text-slate-400 font-semibold">{user?.company_name} (ЕИК: {user?.eik})</p>
+              </div>
             </div>
           </div>
 
@@ -151,7 +220,7 @@ export default function SupplierDashboard() {
           </div>
         </div>
 
-        {/* Секция: Всички артикули в каталога */}
+        {/* Секция: Каталог */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100 flex items-center justify-between">
             <div>
@@ -199,7 +268,7 @@ export default function SupplierDashboard() {
           </div>
         </div>
 
-        {/* Секция: Входящи B2B поръчки */}
+        {/* Секция: Поръчки */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100">
             <h2 className="text-base font-bold text-slate-900">Входящи заявки за презареждане</h2>
@@ -249,7 +318,6 @@ export default function SupplierDashboard() {
         </div>
       </main>
 
-      {/* Модал за импорт */}
       <CsvImportModal 
         isOpen={isImportOpen} 
         onClose={() => setIsImportOpen(false)} 
