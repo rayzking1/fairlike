@@ -18,8 +18,8 @@ import {
   LogIn,
   Download
 } from "lucide-react";
-import { CartProduct } from "../context/CartContext";
-import { useAuth } from "../context/AuthContext";
+import { useCart, CartProduct } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 
 interface CartDrawerProps {
   isOpen?: boolean;
@@ -33,7 +33,14 @@ interface CartDrawerProps {
 }
 
 export default function CartDrawer(props: CartDrawerProps) {
+  const { isCartOpen: contextOpen, setIsCartOpen, items: contextItems, updateQuantity: contextUpdateQty, clearCart: contextClearCart, cartTotal: contextTotal, vatAmount: contextVat, grandTotal: contextGrandTotal, estimatedTotalProfit: contextProfit } = useCart();
   const { user, setIsAuthOpen } = useAuth();
+
+  const isCartOpen = props.isOpen !== undefined ? props.isOpen : contextOpen;
+  const handleClose = () => {
+    if (props.onClose) props.onClose();
+    setIsCartOpen(false);
+  };
 
   const [step, setStep] = useState<"cart" | "checkout" | "success">("cart");
   const [loading, setLoading] = useState(false);
@@ -60,56 +67,23 @@ export default function CartDrawer(props: CartDrawerProps) {
     }
   }, [user]);
 
-  const isCartOpen = props.isOpen !== undefined ? props.isOpen : false;
   if (!isCartOpen) return null;
 
-  const handleClose = () => {
-    if (props.onClose) props.onClose();
-  };
-
-  const cartEntries = Object.entries(props.cart || {}).filter(([_, qty]) => (qty as number) > 0);
-  
-  const items = cartEntries.map(([id, qty]) => {
-    const prod = props.products?.find((p) => p.id === id) || {
-      id,
-      name: `Артикул #${id}`,
-      category: "Каталог",
-      barcode: "",
-      supplierName: "Дистрибутор",
-      supplierMinimum: 50,
-      unitsPerCase: 24,
-      casePrice: 30.0,
-      rrpPrice: 2.0,
-      imageUrl: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80"
-    };
-    return {
-      product: prod as CartProduct,
-      quantityCases: qty as number
-    };
-  });
-
-  const updateQuantity = (id: string, qty: number) => {
-    if (props.onUpdateQuantity) {
-      const current = (props.cart && props.cart[id]) || 0;
-      props.onUpdateQuantity(id, qty - current);
-    }
-  };
-
-  const clearCart = () => {
-    if (props.onClearCart) props.onClearCart();
-  };
-
-  const cartTotal = items.reduce((sum, it) => sum + it.quantityCases * it.product.casePrice, 0);
-  const vatAmount = cartTotal * 0.20;
-  const grandTotal = cartTotal + vatAmount;
-  const estimatedTotalProfit = items.reduce((sum, it) => {
-    const rev = it.product.rrpPrice * it.product.unitsPerCase;
-    return sum + Math.max(0, rev - it.product.casePrice) * it.quantityCases;
-  }, 0);
+  const items = contextItems;
+  const cartTotal = contextTotal;
+  const vatAmount = contextVat;
+  const grandTotal = contextGrandTotal;
+  const estimatedTotalProfit = contextProfit;
 
   const getApiBaseUrl = () => {
     if (props.apiBaseUrl) return props.apiBaseUrl.replace(/\/$/, '');
     if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+    if (typeof window !== 'undefined') {
+      const currentHost = window.location.hostname;
+      if (currentHost.includes('-3000.app.github.dev')) {
+        return `https://${currentHost.replace('-3000.app.github.dev', '-8000.app.github.dev')}`;
+      }
+    }
     return "https://fairlike.onrender.com";
   };
 
@@ -145,7 +119,7 @@ export default function CartDrawer(props: CartDrawerProps) {
       if (!res.ok) throw new Error(data.detail || "Грешка при създаване на поръчката");
 
       setOrderSuccessData(data);
-      clearCart();
+      contextClearCart();
       setStep("success");
     } catch (err: any) {
       alert(err.message || "Възникна проблем при изпращането на поръчката.");
@@ -180,13 +154,13 @@ export default function CartDrawer(props: CartDrawerProps) {
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col">
+        <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col text-slate-800">
           
           <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
             <div className="flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-blue-600" />
+              <ShoppingBag className="w-5 h-5 text-amber-600" />
               <h2 className="text-sm font-bold text-slate-900">
-                {step === "cart" && "B2B Количка"}
+                {step === "cart" && "B2B Количка за зареждане"}
                 {step === "checkout" && "Финализиране на поръчка"}
                 {step === "success" && "Успешна поръчка"}
               </h2>
@@ -208,8 +182,8 @@ export default function CartDrawer(props: CartDrawerProps) {
                 {items.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
                     <ShoppingBag className="w-12 h-12 stroke-1 mb-3 text-slate-300" />
-                    <p className="text-sm font-semibold text-slate-700">Количката ви е празна</p>
-                    <p className="text-xs text-slate-400 mt-1">Добавете артикули в стекове от каталога, за да презаредите обекта си.</p>
+                    <p className="text-sm font-semibold text-slate-700">Количката е празна</p>
+                    <p className="text-xs text-slate-400 mt-1">Добавете стекове от каталога, за да оформите заявка.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -227,20 +201,20 @@ export default function CartDrawer(props: CartDrawerProps) {
                           <div className="flex items-center justify-between mt-2">
                             <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-0.5">
                               <button 
-                                onClick={() => updateQuantity(item.product.id, item.quantityCases - 1)}
+                                onClick={() => contextUpdateQty(item.product.id, item.quantityCases - 1)}
                                 className="p-1 hover:bg-slate-100 text-slate-600 rounded cursor-pointer"
                               >
                                 <Minus className="w-3 h-3" />
                               </button>
                               <span className="text-xs font-bold px-1">{item.quantityCases}</span>
                               <button 
-                                onClick={() => updateQuantity(item.product.id, item.quantityCases + 1)}
+                                onClick={() => contextUpdateQty(item.product.id, item.quantityCases + 1)}
                                 className="p-1 hover:bg-slate-100 text-slate-600 rounded cursor-pointer"
                               >
                                 <Plus className="w-3 h-3" />
                               </button>
                             </div>
-                            <span className="text-xs font-bold text-blue-600">
+                            <span className="text-xs font-bold text-amber-700">
                               {(item.quantityCases * item.product.casePrice).toFixed(2)} лв.
                             </span>
                           </div>
@@ -250,7 +224,7 @@ export default function CartDrawer(props: CartDrawerProps) {
 
                     <div className="pt-2">
                       <button 
-                        onClick={clearCart}
+                        onClick={contextClearCart}
                         className="text-[11px] text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold cursor-pointer"
                       >
                         <Trash2 className="w-3 h-3" /> Изчисти количката
@@ -264,30 +238,30 @@ export default function CartDrawer(props: CartDrawerProps) {
             {step === "checkout" && (
               <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-4">
                 {user ? (
-                  <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
+                  <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-xs">
+                      <div className="w-8 h-8 bg-amber-600 text-white rounded-lg flex items-center justify-center font-bold text-xs">
                         {user.company_name?.charAt(0) || "B"}
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-blue-900">{user.company_name}</p>
-                        <p className="text-[10px] text-blue-700">Данните за фактура са попълнени автоматично</p>
+                        <p className="text-xs font-bold text-amber-950">{user.company_name}</p>
+                        <p className="text-[10px] text-amber-800">Данните за фактура са заредени автоматично</p>
                       </div>
                     </div>
-                    <span className="text-[10px] bg-blue-200/60 text-blue-800 font-bold px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] bg-amber-200/60 text-amber-900 font-bold px-2 py-0.5 rounded-full">
                       Вписан профил
                     </span>
                   </div>
                 ) : (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold text-amber-900">Имате ли B2B профил?</p>
-                      <p className="text-[10px] text-amber-700">Влезте, за да се попълнят данните ви автоматично.</p>
+                      <p className="text-xs font-bold text-slate-800">Имате ли B2B профил?</p>
+                      <p className="text-[10px] text-slate-500">Влезте за автоматично попълване.</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setIsAuthOpen(true)}
-                      className="flex items-center gap-1 bg-white border border-amber-300 text-amber-900 text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-sm hover:bg-amber-100/50 transition-colors cursor-pointer"
+                      className="flex items-center gap-1 bg-white border border-slate-300 text-slate-800 text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-sm hover:bg-slate-100 transition-colors cursor-pointer"
                     >
                       <LogIn className="w-3.5 h-3.5" /> Вход
                     </button>
@@ -304,8 +278,8 @@ export default function CartDrawer(props: CartDrawerProps) {
                         required
                         value={formData.storeName}
                         onChange={(e) => setFormData({...formData, storeName: e.target.value})}
-                        placeholder="напр. Супермаркет Надежда / Детелина ООД" 
-                        className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                        placeholder="Супермаркет Надежда / Детелина ООД" 
+                        className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white"
                       />
                     </div>
                   </div>
@@ -318,7 +292,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                         value={formData.eik}
                         onChange={(e) => setFormData({...formData, eik: e.target.value})}
                         placeholder="206894123" 
-                        className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white font-mono"
+                        className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white font-mono"
                       />
                     </div>
                     <div>
@@ -331,14 +305,14 @@ export default function CartDrawer(props: CartDrawerProps) {
                           value={formData.invoiceEmail}
                           onChange={(e) => setFormData({...formData, invoiceEmail: e.target.value})}
                           placeholder="schetovodstvo@firma.bg" 
-                          className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                          className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white"
                         />
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Точен адрес за доставка на стековете *</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Точен адрес за доставка *</label>
                     <div className="relative">
                       <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                       <input 
@@ -347,7 +321,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                         value={formData.address}
                         onChange={(e) => setFormData({...formData, address: e.target.value})}
                         placeholder="гр. София, кв. Младост 1, ул. Йерусалим 12" 
-                        className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                        className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white"
                       />
                     </div>
                   </div>
@@ -360,7 +334,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                         onClick={() => setFormData({...formData, paymentTerms: "net60"})}
                         className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
                           formData.paymentTerms === "net60"
-                            ? "border-blue-600 bg-blue-50/60 text-blue-900 font-bold"
+                            ? "border-amber-600 bg-amber-50/60 text-amber-950 font-bold"
                             : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                         }`}
                       >
@@ -372,7 +346,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                         onClick={() => setFormData({...formData, paymentTerms: "net30"})}
                         className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
                           formData.paymentTerms === "net30"
-                            ? "border-blue-600 bg-blue-50/60 text-blue-900 font-bold"
+                            ? "border-amber-600 bg-amber-50/60 text-amber-950 font-bold"
                             : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                         }`}
                       >
@@ -389,7 +363,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                         }`}
                       >
                         <p className="text-xs text-emerald-700 font-bold">-2% Отстъпка</p>
-                        <p className="text-[9px] text-slate-500">Плати веднага</p>
+                        <p className="text-[9px] text-slate-500">Веднага</p>
                       </button>
                     </div>
                   </div>
@@ -418,13 +392,12 @@ export default function CartDrawer(props: CartDrawerProps) {
                   </p>
                 </div>
 
-                {/* Бутон за директно сваляне на фактура */}
                 {orderSuccessData?.orderId && (
                   <button
                     type="button"
                     onClick={() => handleDownloadInvoice(orderSuccessData.orderId)}
                     disabled={downloadingPdf}
-                    className="w-full mb-2 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                    className="w-full mb-2 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                   >
                     <Download className="w-4 h-4" />
                     <span>{downloadingPdf ? "Генериране на PDF..." : "Изтегли PDF фактура"}</span>
@@ -455,7 +428,7 @@ export default function CartDrawer(props: CartDrawerProps) {
 
               <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between text-slate-500">
-                  <span>Данъчна основа (без ДДС):</span>
+                  <span>Данъчна основа:</span>
                   <span className="font-semibold text-slate-800">{cartTotal.toFixed(2)} лв.</span>
                 </div>
                 <div className="flex justify-between text-slate-500">
@@ -464,14 +437,14 @@ export default function CartDrawer(props: CartDrawerProps) {
                 </div>
                 <div className="flex justify-between text-sm font-extrabold text-slate-900 pt-1.5 border-t border-slate-200">
                   <span>Общо с ДДС:</span>
-                  <span className="text-blue-600 font-mono">{grandTotal.toFixed(2)} лв.</span>
+                  <span className="text-amber-700 font-mono">{grandTotal.toFixed(2)} лв.</span>
                 </div>
               </div>
 
               {step === "cart" && (
                 <button
                   onClick={() => setStep("checkout")}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-amber-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   Продължи към фактуриране <ArrowRight className="w-4 h-4" />
                 </button>
