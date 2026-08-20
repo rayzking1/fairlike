@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { 
   Building2, 
@@ -19,15 +19,28 @@ import {
   FileSpreadsheet, 
   Save, 
   Check, 
-  AlertCircle 
+  AlertCircle,
+  FileUp,
+  Trash2
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import { useAuth } from "@/context/AuthContext";
 
+interface ParsedProductRow {
+  name: string;
+  barcode: string;
+  casePrice: number;
+  rrpPrice: number;
+  unitsPerCase: number;
+  category: string;
+  imageUrl: string;
+}
+
 export default function SupplierDashboardPage() {
-  const { user, setIsAuthOpen } = useAuth();
+  const { user } = useAuth();
   
-  const [activeTab, setActiveTab] = useState<"orders" | "import" | "add_product">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "import" | "add_product">("import");
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +50,7 @@ export default function SupplierDashboardPage() {
   const [brandMoq, setBrandMoq] = useState<number>(50);
   const [moqSaved, setMoqSaved] = useState(false);
 
-  // Ръчно добавяне на артикул
+  // Ръчно добавяне на стек
   const [newProduct, setNewProduct] = useState({
     name: "",
     barcode: "",
@@ -50,8 +63,12 @@ export default function SupplierDashboardPage() {
   const [productSaving, setProductSaving] = useState(false);
   const [productSuccess, setProductSuccess] = useState(false);
 
-  // Масов импорт
-  const [csvText, setCsvText] = useState("");
+  // Масов импорт на Excel / CSV файлове
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [parsedRows, setParsedRows] = useState<ParsedProductRow[]>([]);
+  const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
   const getApiBaseUrl = () => {
@@ -83,7 +100,7 @@ export default function SupplierDashboardPage() {
         setProducts(pData);
       }
     } catch (e) {
-      console.error("Грешка при зареждане на данни:", e);
+      console.error("Грешка при зареждане:", e);
     } finally {
       setLoading(false);
     }
@@ -93,137 +110,143 @@ export default function SupplierDashboardPage() {
     fetchDashboardData();
   }, []);
 
-  // Смяна на статус на поръчката
+  // Парсване на качения Excel или CSV файл
+  const processExcelFile = (file: File) => {
+    setFileName(file.name);
+    setImportStatus(null);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        if (rawJson.length < 2) {
+          alert("Файлът е празен или липсват данни след заглавния ред.");
+          return;
+        }
+
+        // Пропускаме заглавния ред (index 0) и обработваме редовете
+        const extracted: ParsedProductRow[] = [];
+        for (let i = 1; i < rawJson.length; i++) {
+          const row = rawJson[i];
+          if (!row || row.length === 0 || !row[0]) continue;
+
+          extracted.push({
+            name: String(row[0] || "").trim(),
+            barcode: String(row[1] || `${Date.now()}${i}`),
+            casePrice: parseFloat(String(row[2] || "0").replace(",", ".")) || 20,
+            rrpPrice: parseFloat(String(row[3] || "0").replace(",", ".")) || 28,
+            unitsPerCase: parseInt(String(row[4] || "24"), 10) || 24,
+            category: String(row[5] || "Напитки").trim(),
+            imageUrl: String(row[6] || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500").trim()
+          });
+        }
+
+        setParsedRows(extracted);
+      } catch (err) {
+        console.error("Грешка при четене на Excel файл:", err);
+        alert("Възникна грешка при разчитането на файла. Уверете се, че е валиден .xlsx, .xls или .csv файл.");
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processExcelFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      processExcelFile(e.target.files[0]);
+    }
+  };
+
+  // Качване на разпознатите редове в базата данни
+  const handleUploadRows = async () => {
+    if (parsedRows.length === 0) return;
+    setImporting(true);
+    setImportStatus(`Импортиране на ${parsedRows.length} артикула...`);
+
+    const baseUrl = getApiBaseUrl();
+    let successCount = 0;
+
+    for (let i = 0; i < parsedRows.length; i++) {
+      const row = parsedRows[i];
+      const payload = {
+        name: row.name,
+        barcode: row.barcode,
+        casePrice: row.casePrice,
+        rrpPrice: row.rrpPrice,
+        unitsPerCase: row.unitsPerCase,
+        category: row.category,
+        supplierName: user?.company_name || "Официален Производител",
+        supplierMinimum: brandMoq,
+        imageUrl: row.imageUrl
+      };
+
+      try {
+        const res = await fetch(`${baseUrl}/api/products`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) successCount++;
+      } catch (e) {}
+    }
+
+    setImportStatus(`Успешно импортирани ${successCount} от ${parsedRows.length} артикула!`);
+    setImporting(false);
+    setParsedRows([]);
+    setFileName(null);
+    await fetchDashboardData();
+  };
+
+  // Сваляне на готов шаблон за Excel
+  const handleDownloadExcelTemplate = () => {
+    const wsData = [
+      ["Име на артикул", "Баркод", "Цена на стек (лв)", "Препоръчителна цена за 1бр (лв)", "Брой в стек", "Категория", "Линк към снимка"],
+      ["Coca-Cola Кен 330ml", "5449000000996", 24.00, 1.40, 24, "Напитки", "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500"],
+      ["Chio Чипс Паприка 140g", "4000436000000", 32.00, 2.60, 16, "Снаксове", "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500"],
+      ["Milka Alpine Milk 100g", "7622210000000", 45.00, 2.80, 22, "Шоколади", "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500"],
+      ["Lavazza Crema e Gusto 250g", "8000070000000", 72.00, 7.50, 12, "Кафе & Чай", "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500"]
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Шаблон Каталог");
+    XLSX.writeFile(wb, "OPTOM_BG_Excel_Shablon.xlsx");
+  };
+
+  // Смяна на статус на поръчка
   const handleUpdateStatus = async (orderId: string, newStatus: string) => {
     setStatusUpdating(orderId);
     const baseUrl = getApiBaseUrl();
     try {
-      const res = await fetch(`${baseUrl}/api/orders/${orderId}/status`, {
+      await fetch(`${baseUrl}/api/orders/${orderId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus })
       });
-
-      if (!res.ok) {
-        // Fallback обновяване в локалния стейт ако бекенд рутът не е наличен
-        setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
-        );
-      } else {
-        await fetchDashboardData();
-      }
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+      );
     } catch (e) {
-      // Локално обновяване при мрежово забавяне
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
       );
     } finally {
       setStatusUpdating(null);
     }
-  };
-
-  // Създаване на единичен продукт
-  const handleCreateProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setProductSaving(true);
-    const baseUrl = getApiBaseUrl();
-
-    const payload = {
-      name: newProduct.name,
-      barcode: newProduct.barcode || String(Date.now()),
-      casePrice: parseFloat(newProduct.casePrice),
-      rrpPrice: parseFloat(newProduct.rrpPrice),
-      unitsPerCase: parseInt(newProduct.unitsPerCase, 10),
-      category: newProduct.category,
-      supplierName: user?.company_name || "Официален Производител",
-      supplierMinimum: brandMoq,
-      imageUrl: newProduct.imageUrl || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80"
-    };
-
-    try {
-      const res = await fetch(`${baseUrl}/api/products`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        setProductSuccess(true);
-        setNewProduct({
-          name: "",
-          barcode: "",
-          casePrice: "",
-          rrpPrice: "",
-          unitsPerCase: "24",
-          category: "Напитки",
-          imageUrl: ""
-        });
-        await fetchDashboardData();
-        setTimeout(() => setProductSuccess(false), 2500);
-      }
-    } catch (e) {
-      alert("Грешка при запис на продукта");
-    } finally {
-      setProductSaving(false);
-    }
-  };
-
-  // Обработка на масов CSV импорт
-  const handleCsvImport = async () => {
-    if (!csvText.trim()) {
-      alert("Моля, поставете или качете CSV съдържание.");
-      return;
-    }
-
-    setImportStatus("Обработка на артикулите...");
-    const lines = csvText.trim().split("\n");
-    const baseUrl = getApiBaseUrl();
-    let importedCount = 0;
-
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split(",").map((p) => p.trim());
-      if (parts.length >= 4) {
-        const [name, barcode, casePrice, rrpPrice, unitsPerCase, category, img] = parts;
-        const payload = {
-          name: name || "FMCG Продукт",
-          barcode: barcode || String(Date.now() + i),
-          casePrice: parseFloat(casePrice) || 20,
-          rrpPrice: parseFloat(rrpPrice) || 28,
-          unitsPerCase: parseInt(unitsPerCase, 10) || 24,
-          category: category || "Напитки",
-          supplierName: user?.company_name || "Официален Производител",
-          supplierMinimum: brandMoq,
-          imageUrl: img || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80"
-        };
-
-        try {
-          await fetch(`${baseUrl}/api/products`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-          importedCount++;
-        } catch (e) {}
-      }
-    }
-
-    setImportStatus(`Успешно импортирани ${importedCount} нови артикула!`);
-    await fetchDashboardData();
-    setTimeout(() => {
-      setImportStatus(null);
-      setCsvText("");
-      setActiveTab("orders");
-    }, 2000);
-  };
-
-  const handleDownloadCsvTemplate = () => {
-    const csvContent = "data:text/csv;charset=utf-8,Име на артикул,Баркод,Цена на стек (лв),Препоръчителна цена за 1бр (лв),Брой в стек,Категория,Линк към снимка\nCoca-Cola Кен 330ml,5449000000996,24.00,1.40,24,Напитки,https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500\nChio Чипс Паприка 140g,4000436000000,32.00,2.60,16,Снаксове,https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500";
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "OPTOM_BG_Shablon_Impor_Stoki.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   return (
@@ -278,7 +301,7 @@ export default function SupplierDashboardPage() {
               </div>
             </div>
 
-            {/* Бърза настройка на MOQ */}
+            {/* MOQ Праг */}
             <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-3 rounded-2xl">
               <div>
                 <p className="text-[10px] font-bold uppercase text-slate-500">Минимум за поръчка (MOQ):</p>
@@ -305,11 +328,23 @@ export default function SupplierDashboardPage() {
             </div>
           </div>
 
-          {/* Табове за навигация */}
-          <div className="flex items-center gap-2 mt-8 border-b border-slate-100 -mb-8 pb-3">
+          {/* Табове */}
+          <div className="flex items-center gap-2 mt-8 border-b border-slate-100 -mb-8 pb-3 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab("import")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 ${
+                activeTab === "import"
+                  ? "bg-slate-950 text-white shadow-sm"
+                  : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Масов Excel / CSV импорт</span>
+            </button>
+
             <button
               onClick={() => setActiveTab("orders")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 ${
                 activeTab === "orders"
                   ? "bg-slate-950 text-white shadow-sm"
                   : "bg-slate-50 text-slate-600 hover:bg-slate-100"
@@ -320,43 +355,144 @@ export default function SupplierDashboardPage() {
             </button>
 
             <button
-              onClick={() => setActiveTab("import")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-                activeTab === "import"
-                  ? "bg-slate-950 text-white shadow-sm"
-                  : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Масов CSV / Excel импорт</span>
-            </button>
-
-            <button
               onClick={() => setActiveTab("add_product")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 ${
                 activeTab === "add_product"
                   ? "bg-slate-950 text-white shadow-sm"
                   : "bg-slate-50 text-slate-600 hover:bg-slate-100"
               }`}
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Добави нов стек</span>
+              <span>Добави единичен стек</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Съдържание */}
       <main className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
         
-        {/* ТАБ 1: ПОРЪЧКИ И СТАТУСИ */}
+        {/* ТАБ 1: МАСОВ EXCEL / CSV ИМПОРТ */}
+        {activeTab === "import" && (
+          <div className="max-w-4xl bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-lg font-black text-slate-950 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                  Масов импорт на артикули от Excel
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Качете файл във формат <strong>.xlsx</strong>, <strong>.xls</strong> или <strong>.csv</strong> с пълния ценоразпис.
+                </p>
+              </div>
+              <button
+                onClick={handleDownloadExcelTemplate}
+                className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold text-xs rounded-xl flex items-center gap-2 transition-colors cursor-pointer shrink-0"
+              >
+                <Download className="w-4 h-4 text-emerald-700" />
+                Свали Excel (.xlsx) шаблон
+              </button>
+            </div>
+
+            {/* Скрит Input за избор на файл */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileInputChange}
+              accept=".xlsx, .xls, .csv"
+              className="hidden"
+            />
+
+            {/* Drag & Drop Зона */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={handleFileDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-3xl p-8 text-center cursor-pointer transition-all ${
+                dragActive 
+                  ? "border-emerald-600 bg-emerald-50/50 scale-[0.99]" 
+                  : "border-slate-300 hover:border-slate-400 bg-slate-50/60 hover:bg-slate-50"
+              }`}
+            >
+              <div className="w-14 h-14 rounded-2xl bg-white shadow-sm border border-slate-200 flex items-center justify-center mx-auto mb-3 text-emerald-600">
+                <FileUp className="w-7 h-7" />
+              </div>
+              <p className="text-sm font-bold text-slate-900">
+                {fileName ? `Избран файл: ${fileName}` : "Провлачете Excel файл тук или кликнете за избор"}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Поддържат се файлове: <strong>.XLSX, .XLS, .CSV</strong> (до 10 MB)
+              </p>
+            </div>
+
+            {importStatus && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{importStatus}</span>
+              </div>
+            )}
+
+            {/* Таблица за предварителен преглед на разпознатите артикули */}
+            {parsedRows.length > 0 && (
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    Разпознати артикули ({parsedRows.length} бр.)
+                  </span>
+                  <button
+                    onClick={() => { setParsedRows([]); setFileName(null); }}
+                    className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Откажи
+                  </button>
+                </div>
+
+                <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-2xl bg-white">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 sticky top-0">
+                      <tr>
+                        <th className="p-2.5 pl-4">Артикул</th>
+                        <th className="p-2.5">Баркод</th>
+                        <th className="p-2.5">Цена стек</th>
+                        <th className="p-2.5">Препор. цена</th>
+                        <th className="p-2.5">Брой в стек</th>
+                        <th className="p-2.5">Категория</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {parsedRows.map((r, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50">
+                          <td className="p-2.5 pl-4 font-bold text-slate-900">{r.name}</td>
+                          <td className="p-2.5 font-mono text-slate-500">{r.barcode}</td>
+                          <td className="p-2.5 font-mono font-bold text-slate-900">{r.casePrice.toFixed(2)} лв.</td>
+                          <td className="p-2.5 font-mono text-emerald-700">{r.rrpPrice.toFixed(2)} лв.</td>
+                          <td className="p-2.5 font-mono">{r.unitsPerCase} бр.</td>
+                          <td className="p-2.5">{r.category}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <button
+                  onClick={handleUploadRows}
+                  disabled={importing}
+                  className="w-full py-3.5 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider disabled:opacity-50"
+                >
+                  <Upload className="w-4 h-4 text-emerald-400" />
+                  <span>{importing ? "Импортиране..." : `Качи всички ${parsedRows.length} артикула в каталога`}</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ТАБ 2: ПОРЪЧКИ И СТАТУСИ */}
         {activeTab === "orders" && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-950">Заявки за изпълнение от магазини</h2>
-                <p className="text-xs text-slate-500">Променяйте статусите, за да информирате обектите за доставката.</p>
-              </div>
+            <div>
+              <h2 className="text-lg font-black text-slate-950">Заявки за изпълнение от магазини</h2>
+              <p className="text-xs text-slate-500">Променяйте статусите, за да информирате обектите за доставката.</p>
             </div>
 
             {loading ? (
@@ -375,7 +511,6 @@ export default function SupplierDashboardPage() {
                 {orders.map((order) => {
                   const currentStatus = order.status || "pending";
                   const storeName = order.storeName || order.store_name || "Супермаркет";
-                  const dateStr = order.createdAt || order.created_at;
                   const total = order.total || order.subtotal || 0;
 
                   return (
@@ -386,7 +521,7 @@ export default function SupplierDashboardPage() {
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-3">
                           <span className="text-xs font-black font-mono text-slate-950 bg-slate-100 px-2 py-1 rounded-md">
-                            #{order.id.slice(0, 8)}
+                            #{String(order.id).slice(0, 8)}
                           </span>
                           <span className="text-sm font-bold text-slate-900">{storeName}</span>
                         </div>
@@ -398,7 +533,6 @@ export default function SupplierDashboardPage() {
                         </p>
                       </div>
 
-                      {/* Селектор за статус на поръчката */}
                       <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 shrink-0">
                         <span className="text-[11px] font-bold text-slate-500 mr-1">Статус:</span>
                         
@@ -458,54 +592,6 @@ export default function SupplierDashboardPage() {
           </div>
         )}
 
-        {/* ТАБ 2: МАСОВ CSV/EXCEL ИМПОРТ */}
-        {activeTab === "import" && (
-          <div className="max-w-3xl bg-white rounded-3xl border border-slate-200 p-8 shadow-xs space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div>
-                <h2 className="text-lg font-black text-slate-950">Масово качване на артикули</h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Импортирайте стотици стекове наведнъж чрез стандартен CSV или Excel списък.
-                </p>
-              </div>
-              <button
-                onClick={handleDownloadCsvTemplate}
-                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Download className="w-4 h-4" /> Шаблон за импорт
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block text-xs font-bold text-slate-700">
-                Поставете данните от CSV / Excel таблицата:
-              </label>
-              <textarea
-                rows={8}
-                value={csvText}
-                onChange={(e) => setCsvText(e.target.value)}
-                placeholder="Име на артикул,Баркод,Цена на стек (лв),Препоръчителна цена (лв),Брой в стек,Категория,Линк към снимка&#10;Coca-Cola Кен 330ml,5449000000996,24.00,1.40,24,Напитки,https://...&#10;Red Bull 250ml,9002490100070,36.00,2.50,24,Напитки,https://..."
-                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono text-slate-800 focus:outline-none focus:border-emerald-600 focus:bg-white leading-relaxed"
-              />
-            </div>
-
-            {importStatus && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>{importStatus}</span>
-              </div>
-            )}
-
-            <button
-              onClick={handleCsvImport}
-              className="w-full py-3.5 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider"
-            >
-              <Upload className="w-4 h-4 text-emerald-400" />
-              <span>Стартирай масов импорт</span>
-            </button>
-          </div>
-        )}
-
         {/* ТАБ 3: РЪЧНО ДОБАВЯНЕ НА СТЕК */}
         {activeTab === "add_product" && (
           <div className="max-w-2xl bg-white rounded-3xl border border-slate-200 p-8 shadow-xs space-y-6">
@@ -514,14 +600,39 @@ export default function SupplierDashboardPage() {
               <p className="text-xs text-slate-500 mt-0.5">Въведете параметрите на опаковката и цената на едро.</p>
             </div>
 
-            {productSuccess && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Артикулът беше успешно публикуван в каталога на едро!</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreateProduct} className="space-y-4">
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setProductSaving(true);
+              const baseUrl = getApiBaseUrl();
+              const payload = {
+                name: newProduct.name,
+                barcode: newProduct.barcode || String(Date.now()),
+                casePrice: parseFloat(newProduct.casePrice),
+                rrpPrice: parseFloat(newProduct.rrpPrice),
+                unitsPerCase: parseInt(newProduct.unitsPerCase, 10),
+                category: newProduct.category,
+                supplierName: user?.company_name || "Официален Производител",
+                supplierMinimum: brandMoq,
+                imageUrl: newProduct.imageUrl || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500"
+              };
+              try {
+                const res = await fetch(`${baseUrl}/api/products`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                  setProductSuccess(true);
+                  setNewProduct({ name: "", barcode: "", casePrice: "", rrpPrice: "", unitsPerCase: "24", category: "Напитки", imageUrl: "" });
+                  await fetchDashboardData();
+                  setTimeout(() => setProductSuccess(false), 2500);
+                }
+              } catch (e) {
+                alert("Грешка при запис");
+              } finally {
+                setProductSaving(false);
+              }
+            }} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Име на продукта / стека *</label>
                 <input
@@ -536,7 +647,7 @@ export default function SupplierDashboardPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Едрова цена за цял стек (лв.) *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Едрова цена за стек (лв.) *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -548,7 +659,7 @@ export default function SupplierDashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Препоръчителна цена за 1бр (RRP) *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Препоръчителна цена за 1бр (лв.) *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -596,17 +707,6 @@ export default function SupplierDashboardPage() {
                     className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-600 focus:bg-white"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Линк към снимка на артикула</label>
-                <input
-                  type="url"
-                  value={newProduct.imageUrl}
-                  onChange={(e) => setNewProduct({ ...newProduct, imageUrl: e.target.value })}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
-                />
               </div>
 
               <button
