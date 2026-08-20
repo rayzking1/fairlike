@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+cat << 'EOF' > main.py
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -6,6 +7,7 @@ from typing import List, Optional
 from datetime import date, timedelta
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
+import pandas as pd
 import uuid
 import os
 import io
@@ -285,6 +287,95 @@ def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Продуктът не е намерен")
     return product
 
+@app.post("/api/products/import")
+async def import_products(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Масов импорт на артикули от Excel (.xlsx, .xls) или CSV файл.
+    Очаквани колони: name, category, barcode, units_per_case, case_price, rrp_price
+    Опционални колони: supplier_name, supplier_minimum, image_url
+    """
+    filename_lower = file.filename.lower() if file.filename else ""
+    if not (filename_lower.endswith(".csv") or filename_lower.endswith(".xlsx") or filename_lower.endswith(".xls")):
+        raise HTTPException(status_code=400, detail="Моля, качете валиден .csv или .xlsx файл.")
+
+    contents = await file.read()
+    
+    try:
+        if filename_lower.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Грешка при четене на файла: {str(e)}")
+
+    # Стандартизиране на имената на колоните (малки букви, без интервали)
+    df.columns = [str(col).strip().lower().replace(" ", "_") for col in df.columns]
+
+    required_cols = {"name", "category", "barcode", "units_per_case", "case_price", "rrp_price"}
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Липсват задължителни колони във файла: {', '.join(missing)}"
+        )
+
+    imported_count = 0
+    updated_count = 0
+
+    for _, row in df.iterrows():
+        barcode_raw = str(row["barcode"]).strip()
+        # Премахване на десетична запетая от числов баркод в Excel (напр. 7622210286124.0 -> 7622210286124)
+        if barcode_raw.endswith(".0"):
+            barcode_raw = barcode_raw[:-2]
+
+        if not barcode_raw or barcode_raw == "nan":
+            continue
+
+        existing_prod = db.query(models.Product).filter(models.Product.barcode == barcode_raw).first()
+
+        if existing_prod:
+            # Обновяване на съществуващ продукт (UPSERT)
+            existing_prod.name = str(row["name"]).strip()
+            existing_prod.category = str(row["category"]).strip()
+            existing_prod.unitsPerCase = int(row["units_per_case"])
+            existing_prod.casePrice = float(row["case_price"])
+            existing_prod.rrpPrice = float(row["rrp_price"])
+            if "supplier_name" in row and not pd.isna(row["supplier_name"]):
+                existing_prod.supplierName = str(row["supplier_name"]).strip()
+            if "supplier_minimum" in row and not pd.isna(row["supplier_minimum"]):
+                existing_prod.supplierMinimum = float(row["supplier_minimum"])
+            if "image_url" in row and not pd.isna(row["image_url"]):
+                existing_prod.imageUrl = str(row["image_url"]).strip()
+            updated_count += 1
+        else:
+            # Добавяне на нов продукт
+            new_prod = models.Product(
+                id=str(uuid.uuid4())[:8],
+                name=str(row["name"]).strip(),
+                category=str(row["category"]).strip(),
+                barcode=barcode_raw,
+                supplierName=str(row.get("supplier_name", "Официален Дистрибутор")).strip(),
+                supplierMinimum=float(row.get("supplier_minimum", 50.0)) if not pd.isna(row.get("supplier_minimum")) else 50.0,
+                unitsPerCase=int(row["units_per_case"]),
+                casePrice=float(row["case_price"]),
+                rrpPrice=float(row["rrp_price"]),
+                imageUrl=str(row.get("image_url", "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80")).strip()
+            )
+            db.add(new_prod)
+            imported_count += 1
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "imported": imported_count,
+        "updated": updated_count,
+        "message": f"Успешно обработени: {imported_count} нови артикула, {updated_count} обновени."
+    }
+
 @app.get("/api/orders")
 def get_orders(db: Session = Depends(get_db)):
     """Връща всички поръчки от базата данни за бранд таблото"""
@@ -352,3 +443,4 @@ def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks
         "orderId": order_id,
         "message": "Поръчката е запазена в базата данни и е изпратена фактура по имейл."
     }
+EOF
