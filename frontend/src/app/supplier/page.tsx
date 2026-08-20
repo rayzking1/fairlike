@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { 
   Building2, 
   Package, 
@@ -10,10 +9,10 @@ import {
   Upload, 
   Clock, 
   DollarSign, 
-  ChevronLeft,
-  Truck,
-  ShieldAlert,
-  Lock
+  ChevronLeft, 
+  Truck, 
+  ShieldAlert, 
+  Lock 
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import CsvImportModal from "@/components/CsvImportModal";
@@ -47,12 +46,11 @@ interface Order {
 
 export default function SupplierDashboard() {
   const { user, isAuthenticated, setIsAuthOpen } = useAuth();
-  const router = useRouter();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isImportOpen, setIsImportOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   const getApiBaseUrl = () => {
     if (process.env.NEXT_PUBLIC_API_URL) {
@@ -92,7 +90,7 @@ export default function SupplierDashboard() {
     }
   }, [isAuthenticated, user]);
 
-  // 1. Проверка: Нелогнат потребител
+  // 1. Нелогнат потребител
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -123,7 +121,7 @@ export default function SupplierDashboard() {
     );
   }
 
-  // 2. Проверка: Логнат като Купувач / Магазин (retailer)
+  // 2. Логнат като Магазин (retailer)
   if (user?.role !== "supplier") {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
