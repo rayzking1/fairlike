@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { User, LogIn, LogOut, Building2, Store } from "lucide-react";
+import { LogIn, LogOut, Building2, Store, FileText } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 export default function HeaderAuthButton() {
@@ -20,9 +20,23 @@ export default function HeaderAuthButton() {
             <span>Бранд Портал</span>
           </Link>
         ) : (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-800 rounded-xl text-xs font-bold border border-slate-200">
-            <Store className="w-4 h-4 text-slate-600" />
-            <span className="max-w-[130px] truncate">{user.company_name}</span>
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/orders"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold border border-blue-200 shadow-sm transition-all cursor-pointer"
+              title="Кликнете, за да видите вашите фактури и история на поръчките"
+            >
+              <FileText className="w-3.5 h-3.5 text-blue-600" />
+              <span>Фактури & Поръчки</span>
+            </Link>
+
+            <Link
+              href="/orders"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-200 transition-all cursor-pointer"
+            >
+              <Store className="w-3.5 h-3.5 text-slate-600" />
+              <span className="max-w-[120px] truncate">{user.company_name}</span>
+            </Link>
           </div>
         )}
 
