@@ -13,24 +13,39 @@ import {
   Building, 
   Mail, 
   MapPin, 
-  CreditCard, 
   CheckCircle2, 
-  AlertCircle,
   FileText,
   LogIn
 } from "lucide-react";
-import { useCart } from "@/context/CartContext";
-import { useAuth } from "@/context/AuthContext";
+import { useCart, CartProduct } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
 
-export default function CartDrawer() {
-  const { isCartOpen, setIsCartOpen, items, updateQuantity, removeFromCart, clearCart, cartTotal, vatAmount, grandTotal, estimatedTotalProfit } = useCart();
+interface CartDrawerProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  cart?: Record<string, number>;
+  products?: any[];
+  onUpdateQuantity?: (id: string, delta: number) => void;
+  onClearCart?: () => void;
+  apiBaseUrl?: string;
+  [key: string]: any;
+}
+
+export default function CartDrawer(props: CartDrawerProps) {
+  const contextCart = useCart();
   const { user, setIsAuthOpen } = useAuth();
+
+  // Използва контекста или подадените props
+  const isCartOpen = props.isOpen !== undefined ? props.isOpen : contextCart.isCartOpen;
+  const handleClose = () => {
+    if (props.onClose) props.onClose();
+    contextCart.setIsCartOpen(false);
+  };
 
   const [step, setStep] = useState<"cart" | "checkout" | "success">("cart");
   const [loading, setLoading] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState<any>(null);
 
-  // Форма за данни за доставка и фактура
   const [formData, setFormData] = useState({
     storeName: "",
     eik: "",
@@ -39,7 +54,7 @@ export default function CartDrawer() {
     paymentTerms: "net60" as "net60" | "net30" | "immediate"
   });
 
-  // Автоматично попълване на данните при логнат профил
+  // Автоматично попълване от профила на логнатия магазин
   useEffect(() => {
     if (user) {
       setFormData((prev) => ({
@@ -54,16 +69,55 @@ export default function CartDrawer() {
 
   if (!isCartOpen) return null;
 
+  // Изчисляване на артикулите (съвместимост с props и context)
+  let items = contextCart.items;
+  if (props.cart && props.products && (!items || items.length === 0)) {
+    items = Object.entries(props.cart)
+      .filter(([_, qty]) => (qty as number) > 0)
+      .map(([id, qty]) => {
+        const prod = props.products?.find((p) => p.id === id) || {
+          id,
+          name: `Артикул #${id}`,
+          category: "Каталог",
+          barcode: "",
+          supplierName: "Дистрибутор",
+          supplierMinimum: 50,
+          unitsPerCase: 24,
+          casePrice: 30.0,
+          rrpPrice: 2.0,
+          imageUrl: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80"
+        };
+        return {
+          product: prod as CartProduct,
+          quantityCases: qty as number
+        };
+      });
+  }
+
+  const updateQuantity = (id: string, qty: number) => {
+    if (props.onUpdateQuantity) {
+      const current = (props.cart && props.cart[id]) || 0;
+      props.onUpdateQuantity(id, qty - current);
+    }
+    contextCart.updateQuantity(id, qty);
+  };
+
+  const clearCart = () => {
+    if (props.onClearCart) props.onClearCart();
+    contextCart.clearCart();
+  };
+
+  const cartTotal = items.reduce((sum, it) => sum + it.quantityCases * it.product.casePrice, 0);
+  const vatAmount = cartTotal * 0.20;
+  const grandTotal = cartTotal + vatAmount;
+  const estimatedTotalProfit = items.reduce((sum, it) => {
+    const rev = it.product.rrpPrice * it.product.unitsPerCase;
+    return sum + Math.max(0, rev - it.product.casePrice) * it.quantityCases;
+  }, 0);
+
   const getApiBaseUrl = () => {
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
-    }
-    if (typeof window !== 'undefined') {
-      const currentHost = window.location.hostname;
-      if (currentHost.includes('-3000.app.github.dev')) {
-        return `https://${currentHost.replace('-3000.app.github.dev', '-8000.app.github.dev')}`;
-      }
-    }
+    if (props.apiBaseUrl) return props.apiBaseUrl.replace(/\/$/, '');
+    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
     return "https://fairlike.onrender.com";
   };
 
@@ -113,7 +167,6 @@ export default function CartDrawer() {
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
         <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col">
           
-          {/* Header */}
           <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-5 h-5 text-blue-600" />
@@ -125,19 +178,16 @@ export default function CartDrawer() {
             </div>
             <button 
               onClick={() => {
-                setIsCartOpen(false);
+                handleClose();
                 if (step === "success") setStep("cart");
               }}
-              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Content */}
           <div className="flex-1 overflow-y-auto p-4">
-            
-            {/* STEP 1: CART ITEMS */}
             {step === "cart" && (
               <>
                 {items.length === 0 ? (
@@ -163,14 +213,14 @@ export default function CartDrawer() {
                             <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-0.5">
                               <button 
                                 onClick={() => updateQuantity(item.product.id, item.quantityCases - 1)}
-                                className="p-1 hover:bg-slate-100 text-slate-600 rounded"
+                                className="p-1 hover:bg-slate-100 text-slate-600 rounded cursor-pointer"
                               >
                                 <Minus className="w-3 h-3" />
                               </button>
                               <span className="text-xs font-bold px-1">{item.quantityCases}</span>
                               <button 
                                 onClick={() => updateQuantity(item.product.id, item.quantityCases + 1)}
-                                className="p-1 hover:bg-slate-100 text-slate-600 rounded"
+                                className="p-1 hover:bg-slate-100 text-slate-600 rounded cursor-pointer"
                               >
                                 <Plus className="w-3 h-3" />
                               </button>
@@ -186,7 +236,7 @@ export default function CartDrawer() {
                     <div className="pt-2">
                       <button 
                         onClick={clearCart}
-                        className="text-[11px] text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold"
+                        className="text-[11px] text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold cursor-pointer"
                       >
                         <Trash2 className="w-3 h-3" /> Изчисти количката
                       </button>
@@ -196,16 +246,13 @@ export default function CartDrawer() {
               </>
             )}
 
-            {/* STEP 2: CHECKOUT FORM */}
             {step === "checkout" && (
               <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-4">
-                
-                {/* Аутентикационен статус / Автопопълване */}
                 {user ? (
                   <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-xs">
-                        {user.company_name.charAt(0)}
+                        {user.company_name?.charAt(0) || "B"}
                       </div>
                       <div>
                         <p className="text-xs font-bold text-blue-900">{user.company_name}</p>
@@ -225,7 +272,7 @@ export default function CartDrawer() {
                     <button
                       type="button"
                       onClick={() => setIsAuthOpen(true)}
-                      className="flex items-center gap-1 bg-white border border-amber-300 text-amber-900 text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-sm hover:bg-amber-100/50 transition-colors"
+                      className="flex items-center gap-1 bg-white border border-amber-300 text-amber-900 text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-sm hover:bg-amber-100/50 transition-colors cursor-pointer"
                     >
                       <LogIn className="w-3.5 h-3.5" /> Вход
                     </button>
@@ -296,7 +343,7 @@ export default function CartDrawer() {
                       <button
                         type="button"
                         onClick={() => setFormData({...formData, paymentTerms: "net60"})}
-                        className={`p-2 rounded-xl border text-center transition-all ${
+                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
                           formData.paymentTerms === "net60"
                             ? "border-blue-600 bg-blue-50/60 text-blue-900 font-bold"
                             : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
@@ -308,7 +355,7 @@ export default function CartDrawer() {
                       <button
                         type="button"
                         onClick={() => setFormData({...formData, paymentTerms: "net30"})}
-                        className={`p-2 rounded-xl border text-center transition-all ${
+                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
                           formData.paymentTerms === "net30"
                             ? "border-blue-600 bg-blue-50/60 text-blue-900 font-bold"
                             : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
@@ -320,7 +367,7 @@ export default function CartDrawer() {
                       <button
                         type="button"
                         onClick={() => setFormData({...formData, paymentTerms: "immediate"})}
-                        className={`p-2 rounded-xl border text-center transition-all ${
+                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
                           formData.paymentTerms === "immediate"
                             ? "border-emerald-600 bg-emerald-50/60 text-emerald-900 font-bold"
                             : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
@@ -335,7 +382,6 @@ export default function CartDrawer() {
               </form>
             )}
 
-            {/* STEP 3: ORDER SUCCESS */}
             {step === "success" && (
               <div className="h-full flex flex-col items-center justify-center text-center p-4">
                 <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3">
@@ -358,9 +404,9 @@ export default function CartDrawer() {
                 <button
                   onClick={() => {
                     setStep("cart");
-                    setIsCartOpen(false);
+                    handleClose();
                   }}
-                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-all"
+                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
                 >
                   Обратно към каталога
                 </button>
@@ -368,11 +414,8 @@ export default function CartDrawer() {
             )}
           </div>
 
-          {/* Footer / Calculations */}
           {step !== "success" && items.length > 0 && (
             <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3">
-              
-              {/* Прогнозна печалба */}
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
                 <span className="text-emerald-800 font-medium flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Прогнозен марж:
@@ -409,7 +452,7 @@ export default function CartDrawer() {
                   <button
                     type="button"
                     onClick={() => setStep("cart")}
-                    className="w-1/3 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+                    className="w-1/3 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
                   >
                     Назад
                   </button>
@@ -430,3 +473,5 @@ export default function CartDrawer() {
     </div>
   );
 }
+
+export { CartDrawer };

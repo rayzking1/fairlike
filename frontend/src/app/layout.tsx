@@ -1,24 +1,28 @@
 import type { Metadata } from "next";
-import { AuthProvider } from "@/context/AuthContext";
-import AuthModal from "@/components/AuthModal";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/context/AuthContext";
+import { CartProvider } from "@/context/CartContext";
+
+const inter = Inter({ subsets: ["latin", "cyrillic"] });
 
 export const metadata: Metadata = {
-  title: "OPTOM.BG - B2B Зареждане на магазини",
-  description: "B2B Платформа за презареждане на хранителни стоки с Net 60 дни условия",
+  title: "OPTOM.BG - B2B Платформа за презареждане на търговски обекти",
+  description: "Директни доставки на едро от производители и официални вносители към магазини.",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="bg">
-      <body>
+      <body className={inter.className}>
         <AuthProvider>
-          <AuthModal />
-          {children}
+          <CartProvider>
+            {children}
+          </CartProvider>
         </AuthProvider>
       </body>
     </html>
