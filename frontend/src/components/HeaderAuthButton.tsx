@@ -21,22 +21,20 @@ export default function HeaderAuthButton() {
           </Link>
         ) : (
           <div className="flex items-center gap-1.5">
+            {/* Единствен кликаем бутон за фактури и поръчки */}
             <Link
               href="/orders"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold border border-blue-200 shadow-sm transition-all cursor-pointer"
-              title="Кликнете, за да видите вашите фактури и история на поръчките"
             >
               <FileText className="w-3.5 h-3.5 text-blue-600" />
               <span>Фактури & Поръчки</span>
             </Link>
 
-            <Link
-              href="/orders"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-200 transition-all cursor-pointer"
-            >
-              <Store className="w-3.5 h-3.5 text-slate-600" />
-              <span className="max-w-[120px] truncate">{user.company_name}</span>
-            </Link>
+            {/* Статичен бадж с името на магазина/фирмата */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold border border-slate-200 select-none">
+              <Store className="w-3.5 h-3.5 text-slate-500" />
+              <span className="max-w-[140px] truncate">{user.company_name}</span>
+            </div>
           </div>
         )}
 
