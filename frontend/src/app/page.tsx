@@ -20,6 +20,7 @@ import {
   CreditCard,
   Building2,
   Lock,
+  Eye,
   X
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
@@ -216,7 +217,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Профил и Количка (защитена за нелогнати) */}
+          {/* Профил и Количка */}
           <div className="flex items-center gap-3">
             <HeaderAuthButton />
 
@@ -269,8 +270,8 @@ export default function HomePage() {
                   onClick={() => setIsAuthOpen(true)}
                   className="px-5 py-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Lock className="w-4 h-4 text-emerald-700" />
-                  Виж цените на едро &rarr;
+                  <Eye className="w-4 h-4 text-emerald-700" />
+                  Показване на цените &rarr;
                 </button>
               ) : (
                 <Link
@@ -437,7 +438,7 @@ export default function HomePage() {
                         loading="lazy"
                       />
                       
-                      {/* Марж бадж (Скрит при нелогнат) */}
+                      {/* Марж бадж */}
                       {user ? (
                         <span className="absolute top-3 right-3 bg-emerald-600 text-white font-black text-[10px] px-2 py-0.5 rounded-md shadow-sm">
                           +{marginPercent}% Марж
@@ -456,12 +457,19 @@ export default function HomePage() {
 
                     {/* Данни за артикула */}
                     <div className="p-4 space-y-3">
-                      <h3 className="text-xs font-bold text-slate-950 line-clamp-2 h-8 leading-snug">
-                        {p.name}
-                      </h3>
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-950 line-clamp-2 h-8 leading-snug">
+                          {p.name}
+                        </h3>
+                        {!user && (
+                          <p className="text-[11px] text-slate-500 mt-1 font-medium">
+                            Опаковка: Стек от {p.unitsPerCase} бр.
+                          </p>
+                        )}
+                      </div>
 
                       {/* Ценова табличка - ПОКАЗВА СЕ САМО ЗА ЛОГНАТИ */}
-                      {user ? (
+                      {user && (
                         <>
                           <div className="bg-slate-50 rounded-xl p-2.5 space-y-1 text-xs border border-slate-100">
                             <div className="flex justify-between items-center">
@@ -483,25 +491,11 @@ export default function HomePage() {
                             <span className="font-mono font-black">+{profitPerCase.toFixed(2)} лв.</span>
                           </div>
                         </>
-                      ) : (
-                        /* ЗАКЛЮЧЕНА ЦЕНА ЗА НЕЛОГНАТИ */
-                        <div 
-                          onClick={() => setIsAuthOpen(true)}
-                          className="bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 rounded-xl p-3 text-center cursor-pointer transition-colors space-y-1"
-                        >
-                          <div className="flex items-center justify-center gap-1.5 text-xs font-extrabold text-slate-900">
-                            <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Цените са скрити</span>
-                          </div>
-                          <p className="text-[10px] text-slate-500">
-                            Влезте с B2B профил, за да видите цените на едро и маржовете
-                          </p>
-                        </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Контрол за количество + Добавяне / Вход */}
+                  {/* Контрол за количество + Добавяне / Показване на цените */}
                   <div className="p-4 pt-0">
                     {user ? (
                       <div className="flex items-center gap-2">
@@ -543,10 +537,10 @@ export default function HomePage() {
                     ) : (
                       <button
                         onClick={() => setIsAuthOpen(true)}
-                        className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                        className="w-full py-2.5 px-3 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer hover:scale-[1.02]"
                       >
                         <Lock className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Вход за поръчка</span>
+                        <span>Показване на цените</span>
                       </button>
                     )}
                   </div>
@@ -635,7 +629,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* 9. B2B WELCOME REGISTRATION POP-UP (По желание при първо влизане) */}
+      {/* 9. B2B WELCOME POPUP */}
       {showWelcomePopup && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="relative bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 text-slate-900">
