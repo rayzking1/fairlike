@@ -1,242 +1,325 @@
 "use client";
 
 import React, { useState } from "react";
+import { Eye, EyeOff, X, Building2, Store, Lock, Mail, Building, MapPin, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { X, Building2, Store, Lock, Mail, User, MapPin, Hash } from "lucide-react";
 
 export default function AuthModal() {
-  const { isAuthOpen, setIsAuthOpen, login } = useAuth();
-  const [isLoginView, setIsLoginView] = useState(true);
+  const { isAuthOpen, setIsAuthOpen, login, register } = useAuth();
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [role, setRole] = useState<"retailer" | "supplier">("retailer");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Form states
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [eik, setEik] = useState("");
-  const [address, setAddress] = useState("");
   const [mol, setMol] = useState("");
-  const [role, setRole] = useState<"retailer" | "supplier">("retailer");
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
 
   if (!isAuthOpen) return null;
 
-  // Твърдо зададен URL към Render бекенда
-  const backendUrl = "https://fairlike.onrender.com";
+  const handleClose = () => {
+    setIsAuthOpen(false);
+    setError(null);
+  };
+
+  const handleGoogleAuth = () => {
+    // Демо вход/регистрация през Google за бърз B2B преглед
+    setLoading(true);
+    setTimeout(() => {
+      login("demo.store@optom.bg", "demo1234");
+      setLoading(false);
+      handleClose();
+    }, 600);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
+    setError(null);
 
     try {
-      const endpoint = isLoginView ? "/api/auth/login" : "/api/auth/register";
-      const bodyData = isLoginView
-        ? { email, password }
-        : { email, password, company_name: companyName, eik, address, mol, role };
-
-      const res = await fetch(`${backendUrl}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyData),
-      });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Грешка при връзка със сървъра");
-      
-      login(data.access_token, data.user);
-      setIsAuthOpen(false);
+      if (mode === "login") {
+        await login(email, password);
+      } else {
+        await register({
+          email,
+          password,
+          role,
+          company_name: companyName,
+          eik,
+          mol,
+          address,
+          phone
+        });
+      }
+      handleClose();
     } catch (err: any) {
-      setError(err.message || "Мрежова грешка");
+      setError(err.message || "Възникна грешка при автентикацията.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+      
+      {/* Основна бяла карта */}
+      <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-slate-100 text-slate-800 relative animate-in zoom-in-95 duration-200">
         
-        {/* Хедър */}
-        <div className="bg-slate-900 text-white p-6 relative">
-          <button 
-            onClick={() => setIsAuthOpen(false)}
-            className="absolute top-4 right-4 text-slate-300 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-          <h2 className="text-xl font-bold tracking-tight">
-            {isLoginView ? "Вход в OPTOM.BG" : "B2B Регистрация"}
-          </h2>
-          <p className="text-xs text-slate-300 mt-1">
-            {isLoginView 
-              ? "Управлявайте поръчките и фактурите на вашия магазин" 
-              : "Зареждайте магазини или продавайте на едро"}
+        {/* Лого в стил Hestia */}
+        <div className="flex flex-col items-center text-center mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black text-base shadow-sm">
+              O
+            </div>
+            <span className="text-2xl font-black tracking-tight text-slate-900">
+              OPTOM<span className="text-emerald-600">.BG</span>
+            </span>
+          </div>
+          <p className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400">
+            Официален B2B Маркетплейс
           </p>
         </div>
 
+        {/* Заглавие и подзаглавие */}
+        <div className="text-left mb-5">
+          <h2 className="text-xl font-black text-slate-900">
+            {mode === "login" ? "Вход в профила" : "Регистрация на юридическо лице"}
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+            {mode === "login" 
+              ? "Влезте, за да отключите заводските цени, маржовете и Net 60 отсрочка." 
+              : "Създайте фирмен акаунт за вашия магазин или бранд."}
+          </p>
+        </div>
+
+        {/* Бутон за вход с Google */}
+        <button
+          type="button"
+          onClick={handleGoogleAuth}
+          disabled={loading}
+          className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer disabled:opacity-60 mb-4 hover:border-slate-300"
+        >
+          {/* Google SVG Logo */}
+          <svg className="w-4 h-4" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+          </svg>
+          <span>Продължи с Google</span>
+        </button>
+
+        {/* Разделителна линия "ИЛИ" */}
+        <div className="relative flex items-center justify-center my-4">
+          <div className="border-t border-slate-200 w-full" />
+          <span className="bg-white px-3 text-[10px] font-extrabold uppercase text-slate-400 tracking-wider absolute">
+            ИЛИ
+          </span>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium">
+            {error}
+          </div>
+        )}
+
         {/* Форма */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[85vh] overflow-y-auto">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-700">
-              {error}
-            </div>
-          )}
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-left">
+          
+          {mode === "register" && (
+            <div className="space-y-3 pb-2 border-b border-slate-100">
+              {/* Избор на тип профил */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRole("retailer")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    role === "retailer" 
+                      ? "bg-slate-900 text-white border-slate-900 shadow-sm" 
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  <Store className="w-3.5 h-3.5" /> Магазин / Обект
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRole("supplier")}
+                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    role === "supplier" 
+                      ? "bg-slate-900 text-white border-slate-900 shadow-sm" 
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" /> Производител
+                </button>
+              </div>
 
-          {!isLoginView && (
-            <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200 mb-2">
-              <button
-                type="button"
-                onClick={() => setRole("retailer")}
-                className={`flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  role === "retailer" 
-                    ? "bg-white text-blue-600 shadow-sm border border-slate-200/60" 
-                    : "text-slate-700 hover:text-slate-900"
-                }`}
-              >
-                <Store className="w-4 h-4" /> Магазин
-              </button>
-              <button
-                type="button"
-                onClick={() => setRole("supplier")}
-                className={`flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  role === "supplier" 
-                    ? "bg-white text-blue-600 shadow-sm border border-slate-200/60" 
-                    : "text-slate-700 hover:text-slate-900"
-                }`}
-              >
-                <Building2 className="w-4 h-4" /> Бранд / Вносител
-              </button>
-            </div>
-          )}
-
-          {!isLoginView && (
-            <>
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Фирма / Търговски обект
-                </label>
-                <div className="relative">
-                  <Building2 className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Име на фирмата / Обект *</label>
+                <input
+                  type="text"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="напр. Детелина 2020 ЕООД"
+                  className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-1 focus:ring-emerald-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">ЕИК / БУЛСТАТ *</label>
                   <input
-                    required
                     type="text"
-                    placeholder="напр. ЕТ Ивелина 99"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+                    required
+                    value={eik}
+                    onChange={(e) => setEik(e.target.value)}
+                    placeholder="206894123"
+                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">МОЛ *</label>
+                  <input
+                    type="text"
+                    required
+                    value={mol}
+                    onChange={(e) => setMol(e.target.value)}
+                    placeholder="Иван Петров"
+                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    ЕИК / Булстат
-                  </label>
-                  <div className="relative">
-                    <Hash className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                    <input
-                      required
-                      type="text"
-                      placeholder="205123456"
-                      value={eik}
-                      onChange={(e) => setEik(e.target.value)}
-                      className="w-full pl-8 pr-2.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    МОЛ
-                  </label>
-                  <div className="relative">
-                    <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                    <input
-                      required
-                      type="text"
-                      placeholder="Име Фамилия"
-                      value={mol}
-                      onChange={(e) => setMol(e.target.value)}
-                      className="w-full pl-8 pr-2.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
-                    />
-                  </div>
-                </div>
-              </div>
-
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Адрес за доставка и регистрация
-                </label>
-                <div className="relative">
-                  <MapPin className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                  <input
-                    required
-                    type="text"
-                    placeholder="гр. София, ул. Търговска 10"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    className="w-full pl-10 pr-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
-                  />
-                </div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Адрес на обекта / склад *</label>
+                <input
+                  type="text"
+                  required
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="гр. София, бул. Цариградско шосе 115"
+                  className="w-full text-xs px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
+                />
               </div>
-            </>
+            </div>
           )}
 
+          {/* Имейл */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-              Служебен имейл
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-              <input
-                required
-                type="email"
-                placeholder="store@domain.bg"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
-              />
-            </div>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1">Имейл адрес *</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="vashiat-email@firma.bg"
+              className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-1 focus:ring-emerald-600"
+            />
           </div>
 
+          {/* Парола с бутон за показване/скриване */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-              Парола
-            </label>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1">Парола *</label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
               <input
+                type={showPassword ? "text" : "password"}
                 required
-                type="password"
-                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-3.5 py-2.5 text-sm font-medium text-slate-900 placeholder:text-slate-400 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+                placeholder="••••••••"
+                className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-1 focus:ring-emerald-600 pr-10"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
+          {/* Remember me & Forgot Password */}
+          {mode === "login" && (
+            <div className="flex items-center justify-between text-xs pt-1">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-600 text-[11px]">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
+                />
+                <span>Запомни ме</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => alert("Линк за възстановяване на паролата е изпратен на вашия имейл.")}
+                className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
+              >
+                Забравена парола?
+              </button>
+            </div>
+          )}
+
+          {/* Основен бутон (Зелен като в референцията) */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 mt-2 cursor-pointer"
+            className="w-full py-3 bg-[#7CB342] hover:bg-[#689F38] text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-60 uppercase tracking-wider mt-2"
           >
-            {loading ? "Обработка..." : isLoginView ? "Вход в профила" : "Завърши B2B регистрация"}
+            {loading 
+              ? "Обработка..." 
+              : mode === "login" ? "Вход в профила" : "Създай B2B профил"}
           </button>
-
-          <div className="text-center pt-2">
-            <button
-              type="button"
-              onClick={() => { setIsLoginView(!isLoginView); setError(null); }}
-              className="text-xs font-semibold text-slate-600 hover:text-blue-600 transition-colors cursor-pointer"
-            >
-              {isLoginView 
-                ? "Нямате профил? Регистрирайте фирмата си тук" 
-                : "Вече имате профил? Влезте оттук"}
-            </button>
-          </div>
         </form>
+
+        {/* Превключване между Вход и Регистрация */}
+        <div className="text-center mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500">
+          {mode === "login" ? (
+            <span>
+              Нямате фирмен акаунт?{" "}
+              <button
+                type="button"
+                onClick={() => setMode("register")}
+                className="font-bold text-emerald-700 hover:underline cursor-pointer"
+              >
+                Регистрация
+              </button>
+            </span>
+          ) : (
+            <span>
+              Вече имате профил?{" "}
+              <button
+                type="button"
+                onClick={() => setMode("login")}
+                className="font-bold text-emerald-700 hover:underline cursor-pointer"
+              >
+                Влезте тук
+              </button>
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Овален бутон "✕ Close" отдолу като в референцията */}
+      <button
+        type="button"
+        onClick={handleClose}
+        className="mt-4 px-5 py-2 bg-white/90 hover:bg-white text-slate-800 rounded-full text-xs font-bold shadow-lg flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105"
+      >
+        <X className="w-3.5 h-3.5" />
+        <span>Затвори</span>
+      </button>
     </div>
   );
 }
