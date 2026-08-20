@@ -1,273 +1,432 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Product } from '@/types';
-import { X, Trash2, CheckCircle2, Loader2, ShieldCheck, CreditCard, Calendar, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { 
+  X, 
+  Trash2, 
+  Plus, 
+  Minus, 
+  ShoppingBag, 
+  ArrowRight, 
+  Sparkles, 
+  ShieldCheck, 
+  Building, 
+  Mail, 
+  MapPin, 
+  CreditCard, 
+  CheckCircle2, 
+  AlertCircle,
+  FileText,
+  LogIn
+} from "lucide-react";
+import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  cart: { [key: string]: number };
-  products: Product[];
-  onUpdateQuantity: (productId: string, delta: number) => void;
-  onClearCart: () => void;
-  apiBaseUrl: string;
-}
+export default function CartDrawer() {
+  const { isCartOpen, setIsCartOpen, items, updateQuantity, removeFromCart, clearCart, cartTotal, vatAmount, grandTotal, estimatedTotalProfit } = useCart();
+  const { user, setIsAuthOpen } = useAuth();
 
-export const CartDrawer: React.FC<Props> = ({
-  isOpen,
-  onClose,
-  cart,
-  products,
-  onUpdateQuantity,
-  onClearCart,
-  apiBaseUrl,
-}) => {
-  const [terms, setTerms] = useState<'net60' | 'net30' | 'prepaid'>('net60');
-  const [storeName, setStoreName] = useState('');
-  const [invoiceEmail, setInvoiceEmail] = useState('');
-  const [address, setAddress] = useState('');
-  const [eik, setEik] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [orderResponse, setOrderResponse] = useState<{ orderId: string } | null>(null);
+  const [step, setStep] = useState<"cart" | "checkout" | "success">("cart");
+  const [loading, setLoading] = useState(false);
+  const [orderSuccessData, setOrderSuccessData] = useState<any>(null);
 
-  if (!isOpen) return null;
+  // Форма за данни за доставка и фактура
+  const [formData, setFormData] = useState({
+    storeName: "",
+    eik: "",
+    address: "",
+    invoiceEmail: "",
+    paymentTerms: "net60" as "net60" | "net30" | "immediate"
+  });
 
-  const items = Object.entries(cart)
-    .map(([id, qty]) => ({
-      product: products.find((p) => p.id === id),
-      qty,
-    }))
-    .filter((item): item is { product: Product; qty: number } => Boolean(item.product));
+  // Автоматично попълване на данните при логнат профил
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        storeName: user.company_name || "",
+        eik: user.eik || "",
+        address: user.address || "",
+        invoiceEmail: user.email || "",
+      }));
+    }
+  }, [user]);
 
-  // Групиране по производител/бранд за изчисляване на минимални прагове
-  const supplierGroups = items.reduce<{ [supplier: string]: { items: typeof items; total: number; min: number } }>(
-    (acc, item) => {
-      const sup = item.product.supplierName;
-      if (!acc[sup]) {
-        acc[sup] = { items: [], total: 0, min: item.product.supplierMinimum || 50 };
+  if (!isCartOpen) return null;
+
+  const getApiBaseUrl = () => {
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+    }
+    if (typeof window !== 'undefined') {
+      const currentHost = window.location.hostname;
+      if (currentHost.includes('-3000.app.github.dev')) {
+        return `https://${currentHost.replace('-3000.app.github.dev', '-8000.app.github.dev')}`;
       }
-      acc[sup].items.push(item);
-      acc[sup].total += item.product.casePrice * item.qty;
-      return acc;
-    },
-    {}
-  );
+    }
+    return "https://fairlike.onrender.com";
+  };
 
-  const subtotal = items.reduce((acc, i) => acc + i.product.casePrice * i.qty, 0);
-  const discount = terms === 'prepaid' ? subtotal * 0.02 : 0; // 2% касова отстъпка при предплащане
-  const netSubtotal = subtotal - discount;
-  const vat = netSubtotal * 0.2;
-  const total = netSubtotal + vat;
-
-  // Изчисляване на очакваните приходи и чиста печалба на търговеца
-  const expectedRetailRevenue = items.reduce(
-    (acc, i) => acc + i.product.rrpPrice * i.product.unitsPerCase * i.qty,
-    0
-  );
-  const totalEstimatedProfit = expectedRetailRevenue - (netSubtotal + vat);
-
-  const handleSubmitOrder = async (e: React.FormEvent) => {
+  const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    setLoading(true);
 
-    const payload = {
-      storeName,
-      invoiceEmail,
-      address,
-      eik,
-      paymentTerms: terms,
-      items: items.map((i) => ({
-        productId: i.product.id,
-        quantityCases: i.qty,
-        casePrice: i.product.casePrice,
+    const baseUrl = getApiBaseUrl();
+    const orderPayload = {
+      storeName: formData.storeName,
+      invoiceEmail: formData.invoiceEmail,
+      address: formData.address,
+      eik: formData.eik,
+      paymentTerms: formData.paymentTerms,
+      items: items.map(it => ({
+        productId: it.product.id,
+        quantityCases: it.quantityCases,
+        casePrice: it.product.casePrice
       })),
-      subtotal: netSubtotal,
-      vat,
-      total,
-      estimatedProfit: totalEstimatedProfit,
+      subtotal: cartTotal,
+      vat: vatAmount,
+      total: grandTotal,
+      estimatedProfit: estimatedTotalProfit
     };
 
     try {
-      const res = await fetch(`${apiBaseUrl}/api/orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      const res = await fetch(`${baseUrl}/api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderPayload)
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Грешка при създаване на поръчката");
 
-      if (res.ok) {
-        const data = await res.json();
-        setOrderResponse(data);
-      } else {
-        setOrderResponse({ orderId: Math.random().toString(36).substring(2, 8).toUpperCase() });
-      }
-    } catch {
-      setOrderResponse({ orderId: Math.random().toString(36).substring(2, 8).toUpperCase() });
+      setOrderSuccessData(data);
+      clearCart();
+      setStep("success");
+    } catch (err: any) {
+      alert(err.message || "Възникна проблем при изпращането на поръчката.");
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex justify-end">
-      <div className="bg-white w-full max-w-lg h-full flex flex-col justify-between shadow-2xl p-6 overflow-y-auto">
-        <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-          <div>
-            <h2 className="text-lg font-bold text-neutral-900">B2B Количка</h2>
-            <p className="text-xs text-neutral-400">Гарантирани Faire условия за магазини</p>
-          </div>
-          <button onClick={onClose} className="p-1 text-neutral-400 hover:text-neutral-700">
-            <X size={20} />
-          </button>
-        </div>
-
-        {orderResponse ? (
-          <div className="py-12 flex flex-col items-center text-center space-y-4">
-            <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center">
-              <CheckCircle2 size={40} className="text-emerald-600" />
+    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
+        <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col">
+          
+          {/* Header */}
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="w-5 h-5 text-blue-600" />
+              <h2 className="text-sm font-bold text-slate-900">
+                {step === "cart" && "B2B Количка"}
+                {step === "checkout" && "Финализиране на поръчка"}
+                {step === "success" && "Успешна поръчка"}
+              </h2>
             </div>
-            <h3 className="text-xl font-bold text-neutral-900">Заявка #{orderResponse.orderId} е регистрирана!</h3>
-            <p className="text-xs text-neutral-500 max-w-sm">
-              Условията на плащане са активирани ({terms === 'net60' ? 'Net 60 дни' : terms === 'net30' ? 'Net 30 дни' : 'Плащане веднага с -2% отстъпка'}). Документите са изпратени на <b>{invoiceEmail}</b>.
-            </p>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-800 text-xs flex items-center gap-2">
-              <ShieldCheck size={18} />
-              <span>Включена 60-дневна гаранция за безплатно връщане на непродадени артикули.</span>
-            </div>
-            <button
+            <button 
               onClick={() => {
-                setOrderResponse(null);
-                onClearCart();
-                onClose();
+                setIsCartOpen(false);
+                if (step === "success") setStep("cart");
               }}
-              className="mt-4 w-full bg-neutral-900 text-white py-3 rounded-xl text-sm font-semibold hover:bg-neutral-800 transition-colors"
+              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
             >
-              Към каталога
+              <X className="w-5 h-5" />
             </button>
           </div>
-        ) : items.length === 0 ? (
-          <div className="py-20 text-center text-neutral-400 text-sm">Количката за презареждане е празна.</div>
-        ) : (
-          <form onSubmit={handleSubmitOrder} className="flex-1 flex flex-col justify-between mt-4 space-y-6">
-            {/* Списък с артикули, групирани по бранд + минимални прагове */}
-            <div className="space-y-4">
-              {Object.entries(supplierGroups).map(([supplier, data]) => {
-                const diff = data.min - data.total;
-                const isMet = diff <= 0;
-                return (
-                  <div key={supplier} className="bg-neutral-50 border border-neutral-200/80 rounded-xl p-3 space-y-2.5">
-                    <div className="flex items-center justify-between text-xs font-semibold text-neutral-800">
-                      <span>{supplier}</span>
-                      <span className={isMet ? 'text-emerald-600' : 'text-amber-600'}>
-                        {isMet ? '✓ Изпълнен минимум' : `Още ${diff.toFixed(2)} лв. до минимум`}
-                      </span>
-                    </div>
 
-                    <div className="space-y-2">
-                      {data.items.map(({ product, qty }) => (
-                        <div key={product.id} className="flex items-center justify-between gap-3 text-xs bg-white p-2 rounded-lg border border-neutral-100">
-                          <div className="flex-1">
-                            <p className="font-medium text-neutral-900">{product.name}</p>
-                            <p className="text-[10px] text-neutral-400">{qty} стека × {product.casePrice.toFixed(2)} лв.</p>
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            
+            {/* STEP 1: CART ITEMS */}
+            {step === "cart" && (
+              <>
+                {items.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                    <ShoppingBag className="w-12 h-12 stroke-1 mb-3 text-slate-300" />
+                    <p className="text-sm font-semibold text-slate-700">Количката ви е празна</p>
+                    <p className="text-xs text-slate-400 mt-1">Добавете артикули в стекове от каталога, за да презаредите обекта си.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {items.map((item) => (
+                      <div key={item.product.id} className="flex gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <img 
+                          src={item.product.imageUrl} 
+                          alt={item.product.name} 
+                          className="w-14 h-14 object-cover rounded-lg bg-white border border-slate-200 shrink-0" 
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-xs font-bold text-slate-900 truncate">{item.product.name}</h4>
+                          <p className="text-[11px] text-slate-500">Стек от {item.product.unitsPerCase} бр. &bull; {item.product.casePrice.toFixed(2)} лв./стек</p>
+                          
+                          <div className="flex items-center justify-between mt-2">
+                            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-0.5">
+                              <button 
+                                onClick={() => updateQuantity(item.product.id, item.quantityCases - 1)}
+                                className="p-1 hover:bg-slate-100 text-slate-600 rounded"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <span className="text-xs font-bold px-1">{item.quantityCases}</span>
+                              <button 
+                                onClick={() => updateQuantity(item.product.id, item.quantityCases + 1)}
+                                className="p-1 hover:bg-slate-100 text-slate-600 rounded"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <span className="text-xs font-bold text-blue-600">
+                              {(item.quantityCases * item.product.casePrice).toFixed(2)} лв.
+                            </span>
                           </div>
-                          <span className="font-bold text-neutral-900">{(product.casePrice * qty).toFixed(2)} лв.</span>
-                          <button type="button" onClick={() => onUpdateQuantity(product.id, -qty)} className="text-neutral-400 hover:text-rose-600">
-                            <Trash2 size={15} />
-                          </button>
                         </div>
-                      ))}
+                      </div>
+                    ))}
+
+                    <div className="pt-2">
+                      <button 
+                        onClick={clearCart}
+                        className="text-[11px] text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold"
+                      >
+                        <Trash2 className="w-3 h-3" /> Изчисти количката
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                )}
+              </>
+            )}
 
-            {/* Faire Условия за плащане */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Условия на плащане (Faire Terms)</label>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTerms('net60')}
-                  className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                    terms === 'net60' ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-1">
-                    <Calendar size={13} />
-                    <span className="text-xs font-bold">Net 60</span>
+            {/* STEP 2: CHECKOUT FORM */}
+            {step === "checkout" && (
+              <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-4">
+                
+                {/* Аутентикационен статус / Автопопълване */}
+                {user ? (
+                  <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-xs">
+                        {user.company_name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-blue-900">{user.company_name}</p>
+                        <p className="text-[10px] text-blue-700">Данните за фактура са попълнени автоматично</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] bg-blue-200/60 text-blue-800 font-bold px-2 py-0.5 rounded-full">
+                      Вписан профил
+                    </span>
                   </div>
-                  <span className="text-[10px] opacity-75 mt-1">Плати след 60 дни</span>
-                </button>
+                ) : (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-amber-900">Имате ли B2B профил?</p>
+                      <p className="text-[10px] text-amber-700">Влезте, за да се попълнят данните ви автоматично.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsAuthOpen(true)}
+                      className="flex items-center gap-1 bg-white border border-amber-300 text-amber-900 text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-sm hover:bg-amber-100/50 transition-colors"
+                    >
+                      <LogIn className="w-3.5 h-3.5" /> Вход
+                    </button>
+                  </div>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => setTerms('net30')}
-                  className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                    terms === 'net30' ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-1">
-                    <Calendar size={13} />
-                    <span className="text-xs font-bold">Net 30</span>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Име на търговския обект / Фирма *</label>
+                    <div className="relative">
+                      <Building className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input 
+                        type="text" 
+                        required
+                        value={formData.storeName}
+                        onChange={(e) => setFormData({...formData, storeName: e.target.value})}
+                        placeholder="напр. Супермаркет Надежда / Детелина ООД" 
+                        className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                      />
+                    </div>
                   </div>
-                  <span className="text-[10px] opacity-75 mt-1">Плати след 30 дни</span>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => setTerms('prepaid')}
-                  className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                    terms === 'prepaid' ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-1">
-                    <CreditCard size={13} />
-                    <span className="text-xs font-bold">Веднага</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">ЕИК / БУЛСТАТ</label>
+                      <input 
+                        type="text" 
+                        value={formData.eik}
+                        onChange={(e) => setFormData({...formData, eik: e.target.value})}
+                        placeholder="206894123" 
+                        className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Имейл за фактура *</label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                        <input 
+                          type="email" 
+                          required
+                          value={formData.invoiceEmail}
+                          onChange={(e) => setFormData({...formData, invoiceEmail: e.target.value})}
+                          placeholder="schetovodstvo@firma.bg" 
+                          className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-[10px] text-emerald-500 font-bold mt-1">-2% Отстъпка</span>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Точен адрес за доставка на стековете *</label>
+                    <div className="relative">
+                      <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                      <input 
+                        type="text" 
+                        required
+                        value={formData.address}
+                        onChange={(e) => setFormData({...formData, address: e.target.value})}
+                        placeholder="гр. София, кв. Младост 1, ул. Йерусалим 12" 
+                        className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Условия за B2B плащане</label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, paymentTerms: "net60"})}
+                        className={`p-2 rounded-xl border text-center transition-all ${
+                          formData.paymentTerms === "net60"
+                            ? "border-blue-600 bg-blue-50/60 text-blue-900 font-bold"
+                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        <p className="text-xs">Net 60</p>
+                        <p className="text-[9px] text-slate-500">60 дни отсрочка</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, paymentTerms: "net30"})}
+                        className={`p-2 rounded-xl border text-center transition-all ${
+                          formData.paymentTerms === "net30"
+                            ? "border-blue-600 bg-blue-50/60 text-blue-900 font-bold"
+                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        <p className="text-xs">Net 30</p>
+                        <p className="text-[9px] text-slate-500">30 дни отсрочка</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, paymentTerms: "immediate"})}
+                        className={`p-2 rounded-xl border text-center transition-all ${
+                          formData.paymentTerms === "immediate"
+                            ? "border-emerald-600 bg-emerald-50/60 text-emerald-900 font-bold"
+                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        <p className="text-xs text-emerald-700 font-bold">-2% Отстъпка</p>
+                        <p className="text-[9px] text-slate-500">Плати веднага</p>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 3: ORDER SUCCESS */}
+            {step === "success" && (
+              <div className="h-full flex flex-col items-center justify-center text-center p-4">
+                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-3">
+                  <CheckCircle2 className="w-10 h-10" />
+                </div>
+                <h3 className="text-lg font-extrabold text-slate-900">Поръчката е приета!</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                  Номер на заявка: <strong className="text-slate-900 font-mono">#{orderSuccessData?.orderId}</strong>
+                </p>
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 my-4 w-full text-left text-xs space-y-2">
+                  <p className="text-slate-600 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span>Фактурата е изпратена на: <strong>{formData.invoiceEmail}</strong></span>
+                  </p>
+                  <p className="text-slate-600 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Условия: <strong>{formData.paymentTerms === "net60" ? "Отложено плащане 60 дни" : formData.paymentTerms === "net30" ? "Отложено плащане 30 дни" : "Плащане веднага (-2%)"}</strong></span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setStep("cart");
+                    setIsCartOpen(false);
+                  }}
+                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-all"
+                >
+                  Обратно към каталога
                 </button>
               </div>
-            </div>
+            )}
+          </div>
 
-            {/* Фирмени данни */}
-            <div className="space-y-2">
-              <input required placeholder="Име на обект / Юридическо лице" value={storeName} onChange={(e) => setStoreName(e.target.value)} className="w-full bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 text-xs outline-none focus:border-neutral-900" />
-              <div className="grid grid-cols-2 gap-2">
-                <input required placeholder="ЕИК / Булстат" value={eik} onChange={(e) => setEik(e.target.value)} className="bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 text-xs outline-none focus:border-neutral-900" />
-                <input required type="email" placeholder="Имейл за фактури" value={invoiceEmail} onChange={(e) => setInvoiceEmail(e.target.value)} className="bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 text-xs outline-none focus:border-neutral-900" />
-              </div>
-              <input required placeholder="Точен адрес на обекта за разтоварване" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full bg-neutral-50 border border-neutral-200 rounded-lg p-2.5 text-xs outline-none focus:border-neutral-900" />
-            </div>
-
-            {/* Обобщение + Прогнозна печалба */}
-            <div className="space-y-2 pt-3 border-t border-neutral-100 text-xs">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-emerald-900">
-                <span className="flex items-center gap-1.5 font-medium">
-                  <Sparkles size={14} className="text-emerald-600" /> Прогнозна чиста печалба:
+          {/* Footer / Calculations */}
+          {step !== "success" && items.length > 0 && (
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3">
+              
+              {/* Прогнозна печалба */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                <span className="text-emerald-800 font-medium flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Прогнозен марж:
                 </span>
-                <span className="font-black text-sm">+{totalEstimatedProfit.toFixed(2)} лв.</span>
+                <span className="font-extrabold text-emerald-700 font-mono">+{estimatedTotalProfit.toFixed(2)} лв.</span>
               </div>
 
-              <div className="flex justify-between text-neutral-500 pt-1"><span>Едрова стойност:</span><span>{subtotal.toFixed(2)} лв.</span></div>
-              {discount > 0 && <div className="flex justify-between text-emerald-600 font-semibold"><span>Касова отстъпка (-2%):</span><span>-{discount.toFixed(2)} лв.</span></div>}
-              <div className="flex justify-between text-neutral-500"><span>ДДС (20%):</span><span>{vat.toFixed(2)} лв.</span></div>
-              <div className="flex justify-between font-bold text-base text-neutral-900 pt-1 border-t border-neutral-100">
-                <span>Дължима сума {terms === 'net60' ? '(след 60 дни)' : terms === 'net30' ? '(след 30 дни)' : ''}:</span>
-                <span>{total.toFixed(2)} лв.</span>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between text-slate-500">
+                  <span>Данъчна основа (без ДДС):</span>
+                  <span className="font-semibold text-slate-800">{cartTotal.toFixed(2)} лв.</span>
+                </div>
+                <div className="flex justify-between text-slate-500">
+                  <span>ДДС (20%):</span>
+                  <span className="font-semibold text-slate-800">{vatAmount.toFixed(2)} лв.</span>
+                </div>
+                <div className="flex justify-between text-sm font-extrabold text-slate-900 pt-1.5 border-t border-slate-200">
+                  <span>Общо с ДДС:</span>
+                  <span className="text-blue-600 font-mono">{grandTotal.toFixed(2)} лв.</span>
+                </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="mt-3 w-full bg-neutral-900 hover:bg-neutral-800 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.99] transition-transform"
-              >
-                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Потвърди зареждане с Faire условия'}
-              </button>
+              {step === "cart" && (
+                <button
+                  onClick={() => setStep("checkout")}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  Продължи към фактуриране <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+
+              {step === "checkout" && (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep("cart")}
+                    className="w-1/3 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+                  >
+                    Назад
+                  </button>
+                  <button
+                    type="submit"
+                    form="checkout-form"
+                    disabled={loading}
+                    className="w-2/3 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {loading ? "Изпращане..." : "Потвърди поръчката"}
+                  </button>
+                </div>
+              )}
             </div>
-          </form>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
-};
+}
