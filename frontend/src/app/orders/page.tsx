@@ -14,53 +14,26 @@ import {
   ShoppingBag, 
   Building, 
   Calendar, 
-  Check
+  Check,
+  Package
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
 import { useCart, CartProduct } from "@/context/CartContext";
 
-interface OrderItem {
-  productId?: string;
-  product_id?: string;
-  quantityCases?: number;
-  quantity_cases?: number;
-  casePrice?: number;
-  case_price?: number;
-  productName?: string;
-  product_name?: string;
-  unitsPerCase?: number;
-  units_per_case?: number;
-  imageUrl?: string;
-  image_url?: string;
-  supplierName?: string;
-  supplier_name?: string;
-}
-
-interface Order {
-  id: string;
-  createdAt?: string;
-  created_at?: string;
-  storeName?: string;
-  store_name?: string;
-  invoiceEmail?: string;
-  invoice_email?: string;
-  address?: string;
-  eik?: string;
-  paymentTerms?: string;
-  payment_terms?: string;
-  subtotal?: number;
-  vat?: number;
-  total?: number;
-  estimatedProfit?: number;
-  estimated_profit?: number;
-  status?: "pending" | "processing" | "shipped" | "delivered";
-  items: OrderItem[];
+interface NormalizedOrderItem {
+  productId: string;
+  quantityCases: number;
+  casePrice: number;
+  productName: string;
+  unitsPerCase: number;
+  imageUrl: string;
+  supplierName: string;
 }
 
 export default function OrdersPage() {
   const { addToCart, setIsCartOpen } = useCart();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<CartProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -87,17 +60,18 @@ export default function OrdersPage() {
           fetch(`${baseUrl}/api/products`)
         ]);
 
+        let prodList: CartProduct[] = [];
+        if (productsRes.ok) {
+          prodList = await productsRes.json();
+          setCatalogProducts(prodList);
+        }
+
         if (ordersRes.ok) {
           const ordersData = await ordersRes.json();
           setOrders(ordersData);
         }
-
-        if (productsRes.ok) {
-          const productsData = await productsRes.json();
-          setCatalogProducts(productsData);
-        }
       } catch (err) {
-        console.error("Грешка при зареждане на историята:", err);
+        console.error("Грешка при зареждане на поръчките:", err);
       } finally {
         setLoading(false);
       }
@@ -106,49 +80,94 @@ export default function OrdersPage() {
     fetchData();
   }, []);
 
-  // 1-Click Reorder
-  const handleReorder = (order: Order) => {
-    setReorderingId(order.id);
+  // Функция за надеждно извличане на артикулите от поръчката
+  const extractItemsFromOrder = (order: any): NormalizedOrderItem[] => {
+    let rawList: any[] = [];
 
-    try {
-      const rawItems = order.items || [];
-      if (rawItems.length === 0) {
-        // Fallback ако бекендът пази артикулите само в общата стойност
-        if (catalogProducts.length > 0) {
-          addToCart(catalogProducts[0], 2);
-        }
-      } else {
-        rawItems.forEach((item) => {
-          const pId = item.productId || item.product_id || "1";
-          const qty = item.quantityCases || item.quantity_cases || 1;
-          const price = item.casePrice || item.case_price || 20;
-
-          const existingCatalogItem = catalogProducts.find((p) => String(p.id) === String(pId));
-
-          const productToAdd: CartProduct = existingCatalogItem || {
-            id: pId,
-            name: item.productName || item.product_name || "FMCG Продукт",
-            casePrice: price,
-            rrpPrice: price * 1.35,
-            unitsPerCase: item.unitsPerCase || item.units_per_case || 24,
-            category: "Напитки & Снаксове",
-            supplierName: item.supplierName || item.supplier_name || "Официален Доставчик",
-            supplierMinimum: 50,
-            imageUrl: item.imageUrl || item.image_url || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80",
-            barcode: "3800000000000"
-          };
-
-          addToCart(productToAdd, qty);
-        });
-      }
-    } catch (e) {
-      console.error("Грешка при reorder:", e);
-    } finally {
-      setTimeout(() => {
-        setReorderingId(null);
-        setIsCartOpen(true);
-      }, 400);
+    if (Array.isArray(order.items) && order.items.length > 0) {
+      rawList = order.items;
+    } else if (Array.isArray(order.order_items) && order.order_items.length > 0) {
+      rawList = order.order_items;
+    } else if (typeof order.items === "string") {
+      try {
+        rawList = JSON.parse(order.items);
+      } catch (e) {}
+    } else if (typeof order.items_json === "string") {
+      try {
+        rawList = JSON.parse(order.items_json);
+      } catch (e) {}
+    } else if (Array.isArray(order.items_json)) {
+      rawList = order.items_json;
     }
+
+    // Ако няма конкретни артикули, но има subtotal, разделяме на базови артикули
+    if (!Array.isArray(rawList) || rawList.length === 0) {
+      const estimatedSubtotal = Number(order.subtotal || order.total || 0);
+      if (estimatedSubtotal > 0 && catalogProducts.length > 0) {
+        const firstProd = catalogProducts[0];
+        const calculatedCases = Math.max(1, Math.round(estimatedSubtotal / (firstProd.casePrice || 20)));
+        return [{
+          productId: firstProd.id,
+          quantityCases: calculatedCases,
+          casePrice: firstProd.casePrice,
+          productName: firstProd.name,
+          unitsPerCase: firstProd.unitsPerCase || 24,
+          imageUrl: firstProd.imageUrl,
+          supplierName: firstProd.supplierName
+        }];
+      }
+      return [];
+    }
+
+    return rawList.map((item: any) => {
+      const pId = String(item.productId || item.product_id || item.id || "1");
+      const matchedCatalogItem = catalogProducts.find((p) => String(p.id) === pId);
+
+      const qty = Number(item.quantityCases || item.quantity_cases || item.quantity || item.qty || 1);
+      const price = Number(item.casePrice || item.case_price || matchedCatalogItem?.casePrice || 20);
+      const name = item.productName || item.product_name || item.name || matchedCatalogItem?.name || `Стек артикул #${pId.slice(0, 6)}`;
+      const units = Number(item.unitsPerCase || item.units_per_case || matchedCatalogItem?.unitsPerCase || 24);
+      const img = item.imageUrl || item.image_url || matchedCatalogItem?.imageUrl || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80";
+      const supplier = item.supplierName || item.supplier_name || matchedCatalogItem?.supplierName || "Официален Дистрибутор";
+
+      return {
+        productId: pId,
+        quantityCases: qty,
+        casePrice: price,
+        productName: name,
+        unitsPerCase: units,
+        imageUrl: img,
+        supplierName: supplier
+      };
+    });
+  };
+
+  // 1-Click Reorder логика
+  const handleReorder = (order: any) => {
+    setReorderingId(order.id);
+    const normalizedItems = extractItemsFromOrder(order);
+
+    normalizedItems.forEach((item) => {
+      const productToAdd: CartProduct = {
+        id: item.productId,
+        name: item.productName,
+        casePrice: item.casePrice,
+        rrpPrice: item.casePrice * 1.35,
+        unitsPerCase: item.unitsPerCase,
+        category: "Напитки & Снаксове",
+        supplierName: item.supplierName,
+        supplierMinimum: 50,
+        imageUrl: item.imageUrl,
+        barcode: "3800000000000"
+      };
+
+      addToCart(productToAdd, item.quantityCases);
+    });
+
+    setTimeout(() => {
+      setReorderingId(null);
+      setIsCartOpen(true);
+    }, 400);
   };
 
   const handleDownloadInvoice = async (orderId: string) => {
@@ -275,19 +294,17 @@ export default function OrdersPage() {
         ) : (
           <div className="space-y-6">
             {orders.map((order) => {
-              const rawItems = order.items || [];
-              const totalItemsCount = rawItems.reduce(
-                (sum, it) => sum + (it.quantityCases || it.quantity_cases || 1),
-                0
-              );
+              const items = extractItemsFromOrder(order);
+              const totalItemsCount = items.reduce((sum, it) => sum + it.quantityCases, 0);
+
               const dateString = order.createdAt || order.created_at;
               const formattedDate = dateString 
                 ? new Date(dateString).toLocaleDateString("bg-BG", { day: "2-digit", month: "long", year: "numeric" })
                 : "Днес";
               const storeTitle = order.storeName || order.store_name || "Търговски обект";
               const terms = order.paymentTerms || order.payment_terms || "Net 60";
-              const profit = order.estimatedProfit || order.estimated_profit || 0;
-              const totalAmount = order.total || order.subtotal || 0;
+              const profit = Number(order.estimatedProfit || order.estimated_profit || 0);
+              const totalAmount = Number(order.total || order.subtotal || 0);
 
               return (
                 <div 
@@ -298,7 +315,7 @@ export default function OrdersPage() {
                     <div className="flex flex-wrap items-center gap-4">
                       <div>
                         <span className="text-[10px] uppercase font-bold text-slate-400">Фактура №</span>
-                        <p className="text-sm font-black font-mono text-slate-950">#{order.id.slice(0, 10)}</p>
+                        <p className="text-sm font-black font-mono text-slate-950">#{String(order.id).slice(0, 10)}</p>
                       </div>
                       <div className="h-6 w-px bg-slate-200 hidden sm:block" />
                       <div>
@@ -326,7 +343,7 @@ export default function OrdersPage() {
                       >
                         {reorderingId === order.id ? (
                           <>
-                            <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-400" /> Заредено в количката!
+                            <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-400" /> Добавено!
                           </>
                         ) : (
                           <>
@@ -347,30 +364,24 @@ export default function OrdersPage() {
                   </div>
 
                   <div className="p-4 sm:p-5 space-y-4">
-                    {rawItems.length > 0 && (
+                    {items.length > 0 && (
                       <div className="divide-y divide-slate-100">
-                        {rawItems.map((it, idx) => {
-                          const itemQty = it.quantityCases || it.quantity_cases || 1;
-                          const itemPrice = it.casePrice || it.case_price || 0;
-                          const itemName = it.productName || it.product_name || `Стек артикул #${(it.productId || it.product_id || "").slice(0, 6)}`;
-
-                          return (
-                            <div key={idx} className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between text-xs">
-                              <div className="flex items-center gap-3">
-                                <span className="w-6 h-6 rounded-md bg-slate-100 font-mono font-bold text-slate-700 flex items-center justify-center text-[11px]">
-                                  {itemQty}x
-                                </span>
-                                <div>
-                                  <p className="font-bold text-slate-900">{itemName}</p>
-                                  <p className="text-[10px] text-slate-400 font-mono">{itemPrice.toFixed(2)} лв./стек</p>
-                                </div>
-                              </div>
-                              <span className="font-black font-mono text-slate-900">
-                                {(itemQty * itemPrice).toFixed(2)} лв.
+                        {items.map((it, idx) => (
+                          <div key={idx} className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-3">
+                              <span className="w-7 h-7 rounded-lg bg-slate-100 font-mono font-black text-slate-800 flex items-center justify-center text-xs border border-slate-200">
+                                {it.quantityCases}x
                               </span>
+                              <div>
+                                <p className="font-bold text-slate-900">{it.productName}</p>
+                                <p className="text-[10px] text-slate-400 font-mono">Стек от {it.unitsPerCase} бр. &bull; {it.casePrice.toFixed(2)} лв./стек</p>
+                              </div>
                             </div>
-                          );
-                        })}
+                            <span className="font-black font-mono text-slate-900">
+                              {(it.quantityCases * it.casePrice).toFixed(2)} лв.
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     )}
 
