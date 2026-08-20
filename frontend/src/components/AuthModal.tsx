@@ -21,7 +21,6 @@ export default function AuthModal() {
   const [mol, setMol] = useState("");
   const [address, setAddress] = useState("");
 
-  // Зареждане на последно използвания имейл от браузъра
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedEmail = localStorage.getItem("optom_remembered_email");
@@ -41,13 +40,14 @@ export default function AuthModal() {
   const handleGoogleAuth = () => {
     setLoading(true);
     setTimeout(() => {
+      const isSupp = role === "supplier";
       const demoUser: User = {
-        email: "store.manager@gmail.com",
-        company_name: "Супермаркет Надежда (Google)",
-        role: "retailer",
+        email: isSupp ? "factory.sales@optom.bg" : "store.manager@gmail.com",
+        company_name: isSupp ? "Монделийз България ЕООД" : "Супермаркет Надежда 4",
+        role: isSupp ? "supplier" : "retailer",
         eik: "206894123",
-        mol: "Иван Иванов",
-        address: "гр. София, бул. Цариградско шосе 115"
+        mol: "Димитър Георгиев",
+        address: isSupp ? "гр. София, Складова зона Искър" : "гр. София, бул. Цариградско шосе 115"
       };
       if (rememberMe) {
         localStorage.setItem("optom_remembered_email", demoUser.email);
@@ -72,7 +72,7 @@ export default function AuthModal() {
 
       const userData: User = {
         email,
-        company_name: mode === "register" ? (companyName || email.split("@")[0]) : (companyName || "Моят Търговски Обект"),
+        company_name: companyName || (role === "supplier" ? "Фабрика / Дистрибутор" : "Търговски Обект"),
         role,
         eik: eik || "206894123",
         mol: mol || "Управител",
@@ -91,7 +91,6 @@ export default function AuthModal() {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
       
-      {/* Основна карта */}
       <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-slate-100 text-slate-800 relative animate-in zoom-in-95 duration-200">
         
         {/* Лого */}
@@ -109,19 +108,50 @@ export default function AuthModal() {
           </p>
         </div>
 
-        {/* Заглавие и подзаглавие */}
-        <div className="text-left mb-5">
+        {/* Избор на роля (Винаги видим за лесно превключване) */}
+        <div className="mb-5">
+          <label className="block text-[11px] font-bold text-slate-500 mb-1.5 text-center">Изберете типа на вашия бизнес:</label>
+          <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setRole("retailer")}
+              className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                role === "retailer" 
+                  ? "bg-white text-slate-950 shadow-sm" 
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" /> Магазин / Обект
+            </button>
+            <button
+              type="button"
+              onClick={() => setRole("supplier")}
+              className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                role === "supplier" 
+                  ? "bg-slate-950 text-white shadow-sm" 
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5 text-emerald-400" /> Производител
+            </button>
+          </div>
+        </div>
+
+        {/* Заглавие */}
+        <div className="text-left mb-4">
           <h2 className="text-xl font-black text-slate-900">
-            {mode === "login" ? "Вход в профила" : "Регистрация на юридическо лице"}
+            {mode === "login" 
+              ? (role === "supplier" ? "Вход за Производители" : "Вход за Магазини") 
+              : (role === "supplier" ? "Регистрация на Фабрика" : "Регистрация на Магазин")}
           </h2>
           <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-            {mode === "login" 
-              ? "Влезте, за да отключите заводските цени, маржовете и Net 60 отсрочка." 
-              : "Създайте фирмен акаунт за вашия магазин или бранд."}
+            {role === "supplier" 
+              ? "Достъп до панела за доставки, поръчки и качване на стекове." 
+              : "Отключете заводските цени на едро и Net 60 отсрочка."}
           </p>
         </div>
 
-        {/* Бутон за вход с Google */}
+        {/* Google Single Sign-On */}
         <button
           type="button"
           onClick={handleGoogleAuth}
@@ -134,7 +164,7 @@ export default function AuthModal() {
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
           </svg>
-          <span>Продължи с Google</span>
+          <span>Продължи с Google ({role === "supplier" ? "Производител" : "Магазин"})</span>
         </button>
 
         <div className="relative flex items-center justify-center my-4">
@@ -150,47 +180,21 @@ export default function AuthModal() {
           </div>
         )}
 
-        {/* Форма с вградена поддръжка за браузерно запаметяване и автопопълване */}
         <form onSubmit={handleSubmit} className="space-y-3.5 text-left" autoComplete="on">
           
           {mode === "register" && (
             <div className="space-y-3 pb-2 border-b border-slate-100">
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRole("retailer")}
-                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    role === "retailer" 
-                      ? "bg-slate-900 text-white border-slate-900 shadow-sm" 
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  <Store className="w-3.5 h-3.5" /> Магазин / Обект
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole("supplier")}
-                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    role === "supplier" 
-                      ? "bg-slate-900 text-white border-slate-900 shadow-sm" 
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" /> Производител
-                </button>
-              </div>
-
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Име на фирмата / Обект *</label>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  {role === "supplier" ? "Име на фабриката / Бранд *" : "Име на фирмата / Обект *"}
+                </label>
                 <input
                   type="text"
-                  name="organization"
-                  autoComplete="organization"
                   required
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="напр. Детелина 2020 ЕООД"
-                  className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-1 focus:ring-emerald-600"
+                  placeholder={role === "supplier" ? "напр. Монделийз България" : "напр. Детелина 2020 ЕООД"}
+                  className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
                 />
               </div>
 
@@ -199,7 +203,6 @@ export default function AuthModal() {
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">ЕИК / БУЛСТАТ *</label>
                   <input
                     type="text"
-                    name="taxID"
                     required
                     value={eik}
                     onChange={(e) => setEik(e.target.value)}
@@ -211,8 +214,6 @@ export default function AuthModal() {
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">МОЛ *</label>
                   <input
                     type="text"
-                    name="name"
-                    autoComplete="name"
                     required
                     value={mol}
                     onChange={(e) => setMol(e.target.value)}
@@ -223,11 +224,9 @@ export default function AuthModal() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Адрес на обекта / склад *</label>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Адрес на седалище / склад *</label>
                 <input
                   type="text"
-                  name="street-address"
-                  autoComplete="street-address"
                   required
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
@@ -238,36 +237,30 @@ export default function AuthModal() {
             </div>
           )}
 
-          {/* Имейл */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">Имейл адрес *</label>
             <input
               type="email"
-              name="email"
-              id="email"
               autoComplete="username email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="vashiat-email@firma.bg"
-              className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-1 focus:ring-emerald-600"
+              placeholder="sales@company.bg"
+              className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
             />
           </div>
 
-          {/* Парола */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">Парола *</label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
-                name="password"
-                id="password"
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-1 focus:ring-emerald-600 pr-10"
+                className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white pr-10"
               />
               <button
                 type="button"
@@ -279,18 +272,16 @@ export default function AuthModal() {
             </div>
           </div>
 
-          {/* Remember me & Forgot Password */}
           {mode === "login" && (
             <div className="flex items-center justify-between text-xs pt-1">
               <label className="flex items-center gap-2 cursor-pointer text-slate-600 text-[11px]">
                 <input
                   type="checkbox"
-                  name="remember"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
                 />
-                <span>Запомни ме на това устройство</span>
+                <span>Запомни ме</span>
               </label>
 
               <button
@@ -303,7 +294,6 @@ export default function AuthModal() {
             </div>
           )}
 
-          {/* Зелен бутон */}
           <button
             type="submit"
             disabled={loading}
@@ -311,11 +301,10 @@ export default function AuthModal() {
           >
             {loading 
               ? "Обработка..." 
-              : mode === "login" ? "Вход в профила" : "Създай B2B профил"}
+              : mode === "login" ? `Вход като ${role === "supplier" ? "Производител" : "Магазин"}` : `Регистрация на ${role === "supplier" ? "Производител" : "Магазин"}`}
           </button>
         </form>
 
-        {/* Превключване */}
         <div className="text-center mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500">
           {mode === "login" ? (
             <span>
@@ -343,7 +332,6 @@ export default function AuthModal() {
         </div>
       </div>
 
-      {/* Овален бутон "✕ Close" */}
       <button
         type="button"
         onClick={handleClose}

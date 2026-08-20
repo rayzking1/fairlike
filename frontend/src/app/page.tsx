@@ -5,7 +5,6 @@ import Link from "next/link";
 import { 
   Search, 
   ShoppingBag, 
-  TrendingUp, 
   Truck, 
   ShieldCheck, 
   CheckCircle2, 
@@ -22,7 +21,8 @@ import {
   SlidersHorizontal,
   Award,
   Sparkles,
-  X
+  X,
+  PackagePlus
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
@@ -46,6 +46,7 @@ const RECENT_PURCHASES = [
 export default function HomePage() {
   const { items: cartItems, addToCart, setIsCartOpen } = useCart();
   const { user, setIsAuthOpen } = useAuth();
+  const isSupplier = user?.role === "supplier";
   
   const [products, setProducts] = useState<CartProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +56,6 @@ export default function HomePage() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
   
-  // Следене на скрола за поява на Sticky Filter Bar (като във Faire)
   const [showStickyFilters, setShowStickyFilters] = useState(false);
 
   useEffect(() => {
@@ -70,7 +70,6 @@ export default function HomePage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Welcome Registration Pop-up
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
   useEffect(() => {
@@ -90,7 +89,6 @@ export default function HomePage() {
     sessionStorage.setItem("optom_welcome_dismissed", "true");
   };
 
-  // FOMO таймер
   const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 32, seconds: 45 });
   useEffect(() => {
     const timer = setInterval(() => {
@@ -104,7 +102,6 @@ export default function HomePage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Social proof
   const [toastIndex, setToastIndex] = useState(0);
   const [showToast, setShowToast] = useState(false);
 
@@ -146,7 +143,7 @@ export default function HomePage() {
           setProducts(data);
         }
       } catch (e) {
-        console.error("Грешка при зареждане на каталога:", e);
+        console.error("Грешка при зареждане:", e);
       } finally {
         setLoading(false);
       }
@@ -190,6 +187,10 @@ export default function HomePage() {
       setIsAuthOpen(true);
       return;
     }
+    if (isSupplier) {
+      alert("Като производител можете да управлявате артикулите си през Доставчик Панела.");
+      return;
+    }
     const cases = quantities[product.id] || 1;
     addToCart(product, cases);
     setAddedAnimation(product.id);
@@ -199,6 +200,8 @@ export default function HomePage() {
   const handleCartClick = () => {
     if (!user) {
       setIsAuthOpen(true);
+    } else if (isSupplier) {
+      alert("Количката за зареждане е активна само за профили на търговски обекти/магазини.");
     } else {
       setIsCartOpen(true);
     }
@@ -217,7 +220,6 @@ export default function HomePage() {
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-6">
           
-          {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="w-10 h-10 rounded-xl bg-slate-950 flex items-center justify-center text-white font-black text-xl shadow-md group-hover:bg-slate-800 transition-all">
               O
@@ -230,7 +232,6 @@ export default function HomePage() {
             </div>
           </Link>
 
-          {/* Търсачка */}
           <div className="hidden md:flex flex-1 max-w-md mx-4">
             <div className="relative w-full">
               <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
@@ -244,32 +245,31 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Профил и Количка */}
           <div className="flex items-center gap-3">
             <HeaderAuthButton />
 
-            <button
-              onClick={handleCartClick}
-              className="relative flex items-center gap-2 px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer hover:scale-105"
-            >
-              {user ? <ShoppingBag className="w-4 h-4" /> : <Lock className="w-4 h-4 text-emerald-400" />}
-              <span className="hidden sm:inline">Количка</span>
-              {user && totalCartCases > 0 && (
-                <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-[11px] font-black flex items-center justify-center shadow">
-                  {totalCartCases}
-                </span>
-              )}
-            </button>
+            {!isSupplier && (
+              <button
+                onClick={handleCartClick}
+                className="relative flex items-center gap-2 px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer hover:scale-105"
+              >
+                {user ? <ShoppingBag className="w-4 h-4" /> : <Lock className="w-4 h-4 text-emerald-400" />}
+                <span className="hidden sm:inline">Количка</span>
+                {user && totalCartCases > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-[11px] font-black flex items-center justify-center shadow">
+                    {totalCartCases}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* 3. STICKY FAIRE-STYLE FILTER BAR (Появява се при скрол) */}
+      {/* 3. STICKY FILTER BAR */}
       {showStickyFilters && (
         <div className="sticky top-20 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-sm animate-in slide-in-from-top duration-300 py-3">
           <div className="max-w-7xl mx-auto px-4 sm:px-8 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
-            
-            {/* Faire-style filter pills */}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setFilterType("all")}
@@ -318,7 +318,6 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* Бърз индикатор за резултати */}
             <span className="text-[11px] font-bold text-slate-400 shrink-0 hidden md:inline">
               {filteredProducts.length} оферти
             </span>
@@ -354,7 +353,15 @@ export default function HomePage() {
                 Разгледай каталога <ArrowRight className="w-4 h-4" />
               </button>
               
-              {!user ? (
+              {isSupplier ? (
+                <Link
+                  href="/supplier"
+                  className="px-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md"
+                >
+                  <PackagePlus className="w-4 h-4" />
+                  Към Доставчик Панела &rarr;
+                </Link>
+              ) : !user ? (
                 <button
                   onClick={() => setIsAuthOpen(true)}
                   className="px-5 py-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
@@ -430,7 +437,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. FLASH DEAL BANNER С ЖИВ ТАЙМЕР */}
+      {/* 6. FLASH DEAL BANNER */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
         <div className="rounded-3xl bg-slate-950 text-white p-8 sm:p-12 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 shadow-xl border border-slate-800">
           <div className="space-y-4 max-w-lg">
@@ -444,7 +451,6 @@ export default function HomePage() {
               Специални фабрични квоти за магазини и заведения. Офертата важи до изчерпване на количествата.
             </p>
 
-            {/* Жив брояч */}
             <div className="flex items-center gap-3 pt-2">
               <div className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-center min-w-[60px]">
                 <span className="text-xl font-black font-mono text-emerald-400">{String(timeLeft.hours).padStart(2, '0')}</span>
@@ -518,7 +524,6 @@ export default function HomePage() {
                   className="group bg-white rounded-2xl border border-slate-200 hover:border-slate-950 transition-all duration-200 shadow-xs hover:shadow-xl flex flex-col justify-between overflow-hidden"
                 >
                   <div>
-                    {/* Снимка с марж бадж */}
                     <div className="relative aspect-square bg-[#FAFAFA] p-4 flex items-center justify-center overflow-hidden border-b border-slate-100">
                       <img 
                         src={p.imageUrl} 
@@ -527,7 +532,6 @@ export default function HomePage() {
                         loading="lazy"
                       />
                       
-                      {/* Марж бадж */}
                       {user ? (
                         <span className="absolute top-3 right-3 bg-emerald-600 text-white font-black text-[10px] px-2 py-0.5 rounded-md shadow-sm">
                           +{marginPercent}% Марж
@@ -538,17 +542,14 @@ export default function HomePage() {
                         </span>
                       )}
 
-                      {/* Етикет за производител С ДИРЕКТЕН ЛИНК КЪМ ПРОФИЛА МУ */}
                       <Link
                         href={`/brand/${encodeURIComponent(p.supplierName)}`}
                         className="absolute bottom-3 left-3 bg-white/95 hover:bg-slate-900 hover:text-white text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200 transition-colors shadow-xs"
-                        title={`Виж всички продукти от ${p.supplierName}`}
                       >
                         {p.supplierName} &rarr;
                       </Link>
                     </div>
 
-                    {/* Данни за артикула */}
                     <div className="p-4 space-y-3">
                       <div>
                         <h3 className="text-xs font-bold text-slate-950 line-clamp-2 h-8 leading-snug">
@@ -561,7 +562,6 @@ export default function HomePage() {
                         )}
                       </div>
 
-                      {/* Ценова табличка */}
                       {user && (
                         <>
                           <div className="bg-slate-50 rounded-xl p-2.5 space-y-1 text-xs border border-slate-100">
@@ -588,45 +588,54 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* Контрол за количество + Добавяне / Показване на цените */}
                   <div className="p-4 pt-0">
                     {user ? (
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200">
+                      isSupplier ? (
+                        <Link
+                          href="/supplier"
+                          className="w-full py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          <PackagePlus className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Управлявай в панела</span>
+                        </Link>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200">
+                            <button
+                              onClick={() => handleQtyChange(p.id, -1)}
+                              className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:bg-white transition-colors cursor-pointer"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="w-6 text-center text-xs font-bold font-mono text-slate-900">{qty}</span>
+                            <button
+                              onClick={() => handleQtyChange(p.id, 1)}
+                              className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:bg-white transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+
                           <button
-                            onClick={() => handleQtyChange(p.id, -1)}
-                            className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:bg-white transition-colors cursor-pointer"
+                            onClick={() => handleAddOrAuth(p)}
+                            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                              addedAnimation === p.id
+                                ? "bg-emerald-600 text-white"
+                                : "bg-slate-950 hover:bg-slate-800 text-white shadow-sm"
+                            }`}
                           >
-                            <Minus className="w-3 h-3" />
-                          </button>
-                          <span className="w-6 text-center text-xs font-bold font-mono text-slate-900">{qty}</span>
-                          <button
-                            onClick={() => handleQtyChange(p.id, 1)}
-                            className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:bg-white transition-colors cursor-pointer"
-                          >
-                            <Plus className="w-3 h-3" />
+                            {addedAnimation === p.id ? (
+                              <>
+                                <Check className="w-4 h-4 stroke-[3]" /> Добавено
+                              </>
+                            ) : (
+                              <>
+                                <ShoppingBag className="w-3.5 h-3.5" /> Добави {(qty * p.casePrice).toFixed(2)} лв.
+                              </>
+                            )}
                           </button>
                         </div>
-
-                        <button
-                          onClick={() => handleAddOrAuth(p)}
-                          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                            addedAnimation === p.id
-                              ? "bg-emerald-600 text-white"
-                              : "bg-slate-950 hover:bg-slate-800 text-white shadow-sm"
-                          }`}
-                        >
-                          {addedAnimation === p.id ? (
-                            <>
-                              <Check className="w-4 h-4 stroke-[3]" /> Добавено
-                            </>
-                          ) : (
-                            <>
-                              <ShoppingBag className="w-3.5 h-3.5" /> Добави {(qty * p.casePrice).toFixed(2)} лв.
-                            </>
-                          )}
-                        </button>
-                      </div>
+                      )
                     ) : (
                       <button
                         onClick={() => setIsAuthOpen(true)}
@@ -644,43 +653,6 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* 8. TRUST BANNER FOOTER */}
-      <section className="bg-white border-t border-slate-200 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left">
-            <div className="flex items-start gap-4 justify-center md:justify-start">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-900 flex items-center justify-center shrink-0 border border-slate-200">
-                <Truck className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-950">Бърза палетна логистика</h4>
-                <p className="text-xs text-slate-500 mt-1">Доставки в цяла България директно до рафта на обекта в рамките на 24-48 часа.</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 justify-center md:justify-start">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-950">100% Оригинални продукти</h4>
-                <p className="text-xs text-slate-500 mt-1">Директно от официалните фабрики и вносители със сертификати за произход.</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 justify-center md:justify-start">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-900 flex items-center justify-center shrink-0 border border-slate-200">
-                <CheckCircle2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-950">Автоматични ДДС фактури</h4>
-                <p className="text-xs text-slate-500 mt-1">Моментално генериране на електронни фактури по ЗДДС с Net 60 отсрочка.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* FOOTER */}
       <footer className="bg-slate-950 text-white py-12 text-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-6 border-b border-slate-800 pb-8 mb-8">
@@ -695,7 +667,7 @@ export default function HomePage() {
           </div>
           <div className="flex items-center gap-6 text-slate-400">
             <Link href="/supplier" className="hover:text-white transition-colors">Портал за доставчици</Link>
-            <Link href="/orders" className="hover:text-white transition-colors">Моите фактури</Link>
+            {!isSupplier && <Link href="/orders" className="hover:text-white transition-colors">Моите фактури</Link>}
             <span>Всички цени са без включен ДДС</span>
           </div>
         </div>
@@ -704,7 +676,7 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* 9. LIVE SOCIAL PROOF TOAST */}
+      {/* 8. LIVE SOCIAL PROOF TOAST */}
       {showToast && (
         <div className="fixed bottom-6 left-6 z-50 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl max-w-xs flex items-center gap-3 animate-in slide-in-from-bottom duration-300">
           <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
@@ -722,73 +694,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* 10. B2B WELCOME POPUP */}
-      {showWelcomePopup && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="relative bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 text-slate-900">
-            <button
-              onClick={handleCloseWelcome}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="text-center space-y-4">
-              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto border border-emerald-100">
-                <Store className="w-7 h-7" />
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-700 bg-emerald-100/60 px-2.5 py-1 rounded-full">
-                  Ексклузивно за юридически лица
-                </span>
-                <h3 className="text-2xl font-black text-slate-950 tracking-tight">
-                  Добре дошли в OPTOM.BG
-                </h3>
-                <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-                  За да видите официалните цени на едро, маржовете и да поръчвате с Net 60 отсрочка, отключете достъп за вашия търговски обект.
-                </p>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-left space-y-2.5 text-xs text-slate-700">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Фабрични цени за стекове без посредници</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Отложено плащане Net 60 дни за магазини</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Автоматични фактури по ЗДДС</span>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-2">
-                <button
-                  onClick={() => {
-                    handleCloseWelcome();
-                    setIsAuthOpen(true);
-                  }}
-                  className="w-full py-3.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-slate-950/20 transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Lock className="w-4 h-4 text-emerald-400" />
-                  Вход / Безплатна регистрация
-                </button>
-                <button
-                  onClick={handleCloseWelcome}
-                  className="w-full py-2.5 text-slate-500 hover:text-slate-800 text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Разгледай каталога без цени
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <CartDrawer />
+      {!isSupplier && <CartDrawer />}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { 
   FileText, 
   Download, 
@@ -15,11 +16,12 @@ import {
   Building, 
   Calendar, 
   Check,
-  Package
+  Building2
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
 import { useCart, CartProduct } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 
 interface NormalizedOrderItem {
   productId: string;
@@ -32,12 +34,22 @@ interface NormalizedOrderItem {
 }
 
 export default function OrdersPage() {
+  const router = useRouter();
+  const { user } = useAuth();
   const { addToCart, setIsCartOpen } = useCart();
+  
   const [orders, setOrders] = useState<any[]>([]);
   const [catalogProducts, setCatalogProducts] = useState<CartProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [reorderingId, setReorderingId] = useState<string | null>(null);
+
+  // Ако потребителят е Доставчик, го препращаме към /supplier
+  useEffect(() => {
+    if (user && user.role === "supplier") {
+      router.replace("/supplier");
+    }
+  }, [user, router]);
 
   const getApiBaseUrl = () => {
     if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
@@ -60,9 +72,8 @@ export default function OrdersPage() {
           fetch(`${baseUrl}/api/products`)
         ]);
 
-        let prodList: CartProduct[] = [];
         if (productsRes.ok) {
-          prodList = await productsRes.json();
+          const prodList = await productsRes.json();
           setCatalogProducts(prodList);
         }
 
@@ -80,35 +91,24 @@ export default function OrdersPage() {
     fetchData();
   }, []);
 
-  // Функция за надеждно извличане на артикулите от поръчката
   const extractItemsFromOrder = (order: any): NormalizedOrderItem[] => {
     let rawList: any[] = [];
-
-    if (Array.isArray(order.items) && order.items.length > 0) {
-      rawList = order.items;
-    } else if (Array.isArray(order.order_items) && order.order_items.length > 0) {
-      rawList = order.order_items;
-    } else if (typeof order.items === "string") {
-      try {
-        rawList = JSON.parse(order.items);
-      } catch (e) {}
+    if (Array.isArray(order.items) && order.items.length > 0) rawList = order.items;
+    else if (Array.isArray(order.order_items)) rawList = order.order_items;
+    else if (typeof order.items === "string") {
+      try { rawList = JSON.parse(order.items); } catch (e) {}
     } else if (typeof order.items_json === "string") {
-      try {
-        rawList = JSON.parse(order.items_json);
-      } catch (e) {}
-    } else if (Array.isArray(order.items_json)) {
-      rawList = order.items_json;
+      try { rawList = JSON.parse(order.items_json); } catch (e) {}
     }
 
-    // Ако няма конкретни артикули, но има subtotal, разделяме на базови артикули
     if (!Array.isArray(rawList) || rawList.length === 0) {
-      const estimatedSubtotal = Number(order.subtotal || order.total || 0);
-      if (estimatedSubtotal > 0 && catalogProducts.length > 0) {
+      const subtotal = Number(order.subtotal || order.total || 0);
+      if (subtotal > 0 && catalogProducts.length > 0) {
         const firstProd = catalogProducts[0];
-        const calculatedCases = Math.max(1, Math.round(estimatedSubtotal / (firstProd.casePrice || 20)));
+        const cases = Math.max(1, Math.round(subtotal / (firstProd.casePrice || 20)));
         return [{
           productId: firstProd.id,
-          quantityCases: calculatedCases,
+          quantityCases: cases,
           casePrice: firstProd.casePrice,
           productName: firstProd.name,
           unitsPerCase: firstProd.unitsPerCase || 24,
@@ -121,33 +121,24 @@ export default function OrdersPage() {
 
     return rawList.map((item: any) => {
       const pId = String(item.productId || item.product_id || item.id || "1");
-      const matchedCatalogItem = catalogProducts.find((p) => String(p.id) === pId);
-
-      const qty = Number(item.quantityCases || item.quantity_cases || item.quantity || item.qty || 1);
-      const price = Number(item.casePrice || item.case_price || matchedCatalogItem?.casePrice || 20);
-      const name = item.productName || item.product_name || item.name || matchedCatalogItem?.name || `Стек артикул #${pId.slice(0, 6)}`;
-      const units = Number(item.unitsPerCase || item.units_per_case || matchedCatalogItem?.unitsPerCase || 24);
-      const img = item.imageUrl || item.image_url || matchedCatalogItem?.imageUrl || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80";
-      const supplier = item.supplierName || item.supplier_name || matchedCatalogItem?.supplierName || "Официален Дистрибутор";
-
+      const matched = catalogProducts.find((p) => String(p.id) === pId);
       return {
         productId: pId,
-        quantityCases: qty,
-        casePrice: price,
-        productName: name,
-        unitsPerCase: units,
-        imageUrl: img,
-        supplierName: supplier
+        quantityCases: Number(item.quantityCases || item.quantity_cases || item.quantity || 1),
+        casePrice: Number(item.casePrice || item.case_price || matched?.casePrice || 20),
+        productName: item.productName || item.product_name || matched?.name || `Стек #${pId.slice(0, 6)}`,
+        unitsPerCase: Number(item.unitsPerCase || item.units_per_case || matched?.unitsPerCase || 24),
+        imageUrl: item.imageUrl || item.image_url || matched?.imageUrl || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500",
+        supplierName: item.supplierName || item.supplier_name || matched?.supplierName || "Официален Дистрибутор"
       };
     });
   };
 
-  // 1-Click Reorder логика
   const handleReorder = (order: any) => {
     setReorderingId(order.id);
-    const normalizedItems = extractItemsFromOrder(order);
+    const items = extractItemsFromOrder(order);
 
-    normalizedItems.forEach((item) => {
+    items.forEach((item) => {
       const productToAdd: CartProduct = {
         id: item.productId,
         name: item.productName,
@@ -160,7 +151,6 @@ export default function OrdersPage() {
         imageUrl: item.imageUrl,
         barcode: "3800000000000"
       };
-
       addToCart(productToAdd, item.quantityCases);
     });
 
@@ -176,7 +166,6 @@ export default function OrdersPage() {
     try {
       const res = await fetch(`${baseUrl}/api/orders/${orderId}/invoice`);
       if (!res.ok) throw new Error("Фактурата не можа да бъде генерирана");
-      
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -187,7 +176,7 @@ export default function OrdersPage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err: any) {
-      alert(err.message || "Грешка при сваляне на файла");
+      alert(err.message || "Грешка при сваляне");
     } finally {
       setDownloadingId(null);
     }
@@ -196,41 +185,24 @@ export default function OrdersPage() {
   const getStatusBadge = (status?: string) => {
     switch (status) {
       case "delivered":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <PackageCheck className="w-3.5 h-3.5" /> Доставена
-          </span>
-        );
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><PackageCheck className="w-3.5 h-3.5" /> Доставена</span>;
       case "shipped":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-            <Truck className="w-3.5 h-3.5" /> Натоварена / Пътува
-          </span>
-        );
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><Truck className="w-3.5 h-3.5" /> Натоварена</span>;
       case "processing":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-            <Clock className="w-3.5 h-3.5" /> В подготовка
-          </span>
-        );
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200"><Clock className="w-3.5 h-3.5" /> В подготовка</span>;
       default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Приета заявка
-          </span>
-        );
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Приета заявка</span>;
     }
   };
+
+  if (user?.role === "supplier") return null;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 antialiased">
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <Link 
-              href="/"
-              className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
-            >
+            <Link href="/" className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors">
               <ChevronLeft className="w-4 h-4" /> Каталог
             </Link>
             <div className="h-4 w-px bg-slate-200" />
@@ -243,7 +215,6 @@ export default function OrdersPage() {
               </span>
             </Link>
           </div>
-
           <div className="flex items-center gap-3">
             <HeaderAuthButton />
           </div>
@@ -281,22 +252,13 @@ export default function OrdersPage() {
           <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center shadow-xs">
             <FileText className="w-12 h-12 stroke-1 text-slate-300 mx-auto mb-3" />
             <h3 className="text-sm font-bold text-slate-800">Все още нямате направени заявки</h3>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              След като направите първото зареждане, електронните фактури и опцията за бързо повторно зареждане ще се появят тук.
-            </p>
-            <Link
-              href="/"
-              className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 bg-slate-950 text-white text-xs font-bold rounded-xl shadow-sm hover:bg-slate-800 transition-all"
-            >
-              Към каталога на едро &rarr;
-            </Link>
+            <p className="text-xs text-slate-400 mt-1">След като завършите поръчка, фактурите ще се генерират тук.</p>
           </div>
         ) : (
           <div className="space-y-6">
             {orders.map((order) => {
               const items = extractItemsFromOrder(order);
               const totalItemsCount = items.reduce((sum, it) => sum + it.quantityCases, 0);
-
               const dateString = order.createdAt || order.created_at;
               const formattedDate = dateString 
                 ? new Date(dateString).toLocaleDateString("bg-BG", { day: "2-digit", month: "long", year: "numeric" })
@@ -307,10 +269,7 @@ export default function OrdersPage() {
               const totalAmount = Number(order.total || order.subtotal || 0);
 
               return (
-                <div 
-                  key={order.id}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all overflow-hidden"
-                >
+                <div key={order.id} className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all overflow-hidden">
                   <div className="p-4 sm:p-5 bg-slate-50/70 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
                     <div className="flex flex-wrap items-center gap-4">
                       <div>
@@ -374,7 +333,7 @@ export default function OrdersPage() {
                               </span>
                               <div>
                                 <p className="font-bold text-slate-900">{it.productName}</p>
-                                <p className="text-[10px] text-slate-400 font-mono">Стек от {it.unitsPerCase} бр. &bull; {it.casePrice.toFixed(2)} лв./стек</p>
+                                <p className="text-[10px] text-slate-400 font-mono">{it.casePrice.toFixed(2)} лв./стек</p>
                               </div>
                             </div>
                             <span className="font-black font-mono text-slate-900">
