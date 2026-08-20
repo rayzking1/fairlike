@@ -2,10 +2,10 @@
 
 import React, { useState } from "react";
 import { Eye, EyeOff, X, Building2, Store, Lock, Mail, Building, MapPin, CheckCircle2 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, User } from "@/context/AuthContext";
 
 export default function AuthModal() {
-  const { isAuthOpen, setIsAuthOpen, login, register } = useAuth();
+  const { isAuthOpen, setIsAuthOpen, login } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [role, setRole] = useState<"retailer" | "supplier">("retailer");
   const [showPassword, setShowPassword] = useState(false);
@@ -30,10 +30,18 @@ export default function AuthModal() {
   };
 
   const handleGoogleAuth = () => {
-    // Демо вход/регистрация през Google за бърз B2B преглед
     setLoading(true);
     setTimeout(() => {
-      login("demo.store@optom.bg", "demo1234");
+      const demoUser: User = {
+        email: "store.manager@gmail.com",
+        company_name: "Супермаркет Надежда (Google)",
+        role: "retailer",
+        eik: "206894123",
+        mol: "Иван Иванов",
+        address: "гр. София, бул. Цариградско шосе 115",
+        phone: "0888123456"
+      };
+      login(demoUser);
       setLoading(false);
       handleClose();
     }, 600);
@@ -45,20 +53,17 @@ export default function AuthModal() {
     setError(null);
 
     try {
-      if (mode === "login") {
-        await login(email, password);
-      } else {
-        await register({
-          email,
-          password,
-          role,
-          company_name: companyName,
-          eik,
-          mol,
-          address,
-          phone
-        });
-      }
+      const userData: User = {
+        email,
+        company_name: mode === "register" ? (companyName || email.split("@")[0]) : (companyName || "Моят Търговски Обект"),
+        role,
+        eik: eik || "206894123",
+        mol: mol || "Управител",
+        address: address || "гр. София",
+        phone: phone || "0888123456"
+      };
+      
+      login(userData);
       handleClose();
     } catch (err: any) {
       setError(err.message || "Възникна грешка при автентикацията.");
@@ -107,7 +112,6 @@ export default function AuthModal() {
           disabled={loading}
           className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer disabled:opacity-60 mb-4 hover:border-slate-300"
         >
-          {/* Google SVG Logo */}
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -136,7 +140,6 @@ export default function AuthModal() {
           
           {mode === "register" && (
             <div className="space-y-3 pb-2 border-b border-slate-100">
-              {/* Избор на тип профил */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -226,7 +229,7 @@ export default function AuthModal() {
             />
           </div>
 
-          {/* Парола с бутон за показване/скриване */}
+          {/* Парола */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">Парола *</label>
             <div className="relative">
@@ -263,7 +266,7 @@ export default function AuthModal() {
 
               <button
                 type="button"
-                onClick={() => alert("Линк за възстановяване на паролата е изпратен на вашия имейл.")}
+                onClick={() => alert("Линк за нова парола е изпратен.")}
                 className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
               >
                 Забравена парола?
@@ -271,7 +274,7 @@ export default function AuthModal() {
             </div>
           )}
 
-          {/* Основен бутон (Зелен като в референцията) */}
+          {/* Зелен бутон */}
           <button
             type="submit"
             disabled={loading}
@@ -283,7 +286,7 @@ export default function AuthModal() {
           </button>
         </form>
 
-        {/* Превключване между Вход и Регистрация */}
+        {/* Превключване */}
         <div className="text-center mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500">
           {mode === "login" ? (
             <span>
@@ -311,7 +314,7 @@ export default function AuthModal() {
         </div>
       </div>
 
-      {/* Овален бутон "✕ Close" отдолу като в референцията */}
+      {/* Овален бутон "✕ Close" отдолу */}
       <button
         type="button"
         onClick={handleClose}
