@@ -15,9 +15,10 @@ import {
   MapPin, 
   CheckCircle2, 
   FileText,
-  LogIn
+  LogIn,
+  Download
 } from "lucide-react";
-import { useCart, CartProduct } from "../context/CartContext";
+import { CartProduct } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 
 interface CartDrawerProps {
@@ -32,18 +33,11 @@ interface CartDrawerProps {
 }
 
 export default function CartDrawer(props: CartDrawerProps) {
-  const contextCart = useCart();
   const { user, setIsAuthOpen } = useAuth();
-
-  // Използва контекста или подадените props
-  const isCartOpen = props.isOpen !== undefined ? props.isOpen : contextCart.isCartOpen;
-  const handleClose = () => {
-    if (props.onClose) props.onClose();
-    contextCart.setIsCartOpen(false);
-  };
 
   const [step, setStep] = useState<"cart" | "checkout" | "success">("cart");
   const [loading, setLoading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState<any>(null);
 
   const [formData, setFormData] = useState({
@@ -54,7 +48,6 @@ export default function CartDrawer(props: CartDrawerProps) {
     paymentTerms: "net60" as "net60" | "net30" | "immediate"
   });
 
-  // Автоматично попълване от профила на логнатия магазин
   useEffect(() => {
     if (user) {
       setFormData((prev) => ({
@@ -67,44 +60,43 @@ export default function CartDrawer(props: CartDrawerProps) {
     }
   }, [user]);
 
+  const isCartOpen = props.isOpen !== undefined ? props.isOpen : false;
   if (!isCartOpen) return null;
 
-  // Изчисляване на артикулите (съвместимост с props и context)
-  let items = contextCart.items;
-  if (props.cart && props.products && (!items || items.length === 0)) {
-    items = Object.entries(props.cart)
-      .filter(([_, qty]) => (qty as number) > 0)
-      .map(([id, qty]) => {
-        const prod = props.products?.find((p) => p.id === id) || {
-          id,
-          name: `Артикул #${id}`,
-          category: "Каталог",
-          barcode: "",
-          supplierName: "Дистрибутор",
-          supplierMinimum: 50,
-          unitsPerCase: 24,
-          casePrice: 30.0,
-          rrpPrice: 2.0,
-          imageUrl: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80"
-        };
-        return {
-          product: prod as CartProduct,
-          quantityCases: qty as number
-        };
-      });
-  }
+  const handleClose = () => {
+    if (props.onClose) props.onClose();
+  };
+
+  const cartEntries = Object.entries(props.cart || {}).filter(([_, qty]) => (qty as number) > 0);
+  
+  const items = cartEntries.map(([id, qty]) => {
+    const prod = props.products?.find((p) => p.id === id) || {
+      id,
+      name: `Артикул #${id}`,
+      category: "Каталог",
+      barcode: "",
+      supplierName: "Дистрибутор",
+      supplierMinimum: 50,
+      unitsPerCase: 24,
+      casePrice: 30.0,
+      rrpPrice: 2.0,
+      imageUrl: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80"
+    };
+    return {
+      product: prod as CartProduct,
+      quantityCases: qty as number
+    };
+  });
 
   const updateQuantity = (id: string, qty: number) => {
     if (props.onUpdateQuantity) {
       const current = (props.cart && props.cart[id]) || 0;
       props.onUpdateQuantity(id, qty - current);
     }
-    contextCart.updateQuantity(id, qty);
   };
 
   const clearCart = () => {
     if (props.onClearCart) props.onClearCart();
-    contextCart.clearCart();
   };
 
   const cartTotal = items.reduce((sum, it) => sum + it.quantityCases * it.product.casePrice, 0);
@@ -159,6 +151,29 @@ export default function CartDrawer(props: CartDrawerProps) {
       alert(err.message || "Възникна проблем при изпращането на поръчката.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadInvoice = async (orderId: string) => {
+    setDownloadingPdf(true);
+    const baseUrl = getApiBaseUrl();
+    try {
+      const res = await fetch(`${baseUrl}/api/orders/${orderId}/invoice`);
+      if (!res.ok) throw new Error("Фактурата не можа да бъде изтеглена");
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Faktura_${orderId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err: any) {
+      alert(err.message || "Грешка при сваляне на файла");
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -391,6 +406,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                 <p className="text-xs text-slate-500 mt-1 max-w-xs">
                   Номер на заявка: <strong className="text-slate-900 font-mono">#{orderSuccessData?.orderId}</strong>
                 </p>
+                
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 my-4 w-full text-left text-xs space-y-2">
                   <p className="text-slate-600 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-blue-600 shrink-0" />
@@ -401,12 +417,26 @@ export default function CartDrawer(props: CartDrawerProps) {
                     <span>Условия: <strong>{formData.paymentTerms === "net60" ? "Отложено плащане 60 дни" : formData.paymentTerms === "net30" ? "Отложено плащане 30 дни" : "Плащане веднага (-2%)"}</strong></span>
                   </p>
                 </div>
+
+                {/* Бутон за директно сваляне на фактура */}
+                {orderSuccessData?.orderId && (
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadInvoice(orderSuccessData.orderId)}
+                    disabled={downloadingPdf}
+                    className="w-full mb-2 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>{downloadingPdf ? "Генериране на PDF..." : "Изтегли PDF фактура"}</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => {
                     setStep("cart");
                     handleClose();
                   }}
-                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
+                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
                 >
                   Обратно към каталога
                 </button>
