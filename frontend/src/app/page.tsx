@@ -11,16 +11,17 @@ import {
   CheckCircle2, 
   Plus, 
   Minus, 
-  ArrowRight,
-  Zap,
-  Package,
+  ArrowRight, 
+  Zap, 
+  Package, 
+  Store, 
+  Check, 
+  Building2, 
+  Lock, 
+  Eye, 
+  SlidersHorizontal,
+  Award,
   Sparkles,
-  Store,
-  Check,
-  CreditCard,
-  Building2,
-  Lock,
-  Eye,
   X
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
@@ -50,9 +51,25 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [filterType, setFilterType] = useState<"all" | "local" | "low_min" | "top_brand">("all");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
   
+  // Следене на скрола за поява на Sticky Filter Bar (като във Faire)
+  const [showStickyFilters, setShowStickyFilters] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 420) {
+        setShowStickyFilters(true);
+      } else {
+        setShowStickyFilters(false);
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   // Welcome Registration Pop-up
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
@@ -146,9 +163,19 @@ export default function HomePage() {
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.barcode.includes(searchTerm);
-      return matchesCat && matchesSearch;
+      
+      let matchesFilter = true;
+      if (filterType === "local") {
+        matchesFilter = p.supplierName.includes("България") || p.supplierName.includes("ЕАД") || p.supplierName.includes("ООД");
+      } else if (filterType === "low_min") {
+        matchesFilter = (p.supplierMinimum || 50) <= 50;
+      } else if (filterType === "top_brand") {
+        matchesFilter = p.supplierName.includes("Кока-Кола") || p.supplierName.includes("Ред Бул") || p.supplierName.includes("Монделийз");
+      }
+
+      return matchesCat && matchesSearch && matchesFilter;
     });
-  }, [products, selectedCategory, searchTerm]);
+  }, [products, selectedCategory, searchTerm, filterType]);
 
   const handleQtyChange = (productId: string, delta: number) => {
     setQuantities((prev) => {
@@ -237,7 +264,69 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* 3. HERO СЕКЦИЯ */}
+      {/* 3. STICKY FAIRE-STYLE FILTER BAR (Появява се при скрол) */}
+      {showStickyFilters && (
+        <div className="sticky top-20 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-sm animate-in slide-in-from-top duration-300 py-3">
+          <div className="max-w-7xl mx-auto px-4 sm:px-8 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
+            
+            {/* Faire-style filter pills */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setFilterType("all")}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer border ${
+                  filterType === "all"
+                    ? "bg-slate-950 text-white border-slate-950 shadow-xs"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Всички артикули</span>
+              </button>
+
+              <button
+                onClick={() => setFilterType("local")}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer border ${
+                  filterType === "local"
+                    ? "bg-slate-950 text-white border-slate-950 shadow-xs"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                <span>🇧🇬 Български производители</span>
+              </button>
+
+              <button
+                onClick={() => setFilterType("low_min")}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer border ${
+                  filterType === "low_min"
+                    ? "bg-slate-950 text-white border-slate-950 shadow-xs"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                <span>Нисък минимум (MOQ ≤ 50 лв.)</span>
+              </button>
+
+              <button
+                onClick={() => setFilterType("top_brand")}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer border ${
+                  filterType === "top_brand"
+                    ? "bg-slate-950 text-white border-slate-950 shadow-xs"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                <Award className="w-3.5 h-3.5 text-amber-500" />
+                <span>Топ Брандове</span>
+              </button>
+            </div>
+
+            {/* Бърз индикатор за резултати */}
+            <span className="text-[11px] font-bold text-slate-400 shrink-0 hidden md:inline">
+              {filteredProducts.length} оферти
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 4. HERO СЕКЦИЯ */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-8 sm:py-12">
         <div className="relative rounded-3xl bg-white border border-slate-200/80 overflow-hidden min-h-[440px] flex flex-col md:flex-row items-center justify-between p-8 sm:p-14 shadow-sm">
           
@@ -303,7 +392,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4. КАТЕГОРИИ ЗА ЗАРЕЖДАНЕ */}
+      {/* 5. КАТЕГОРИИ ЗА ЗАРЕЖДАНЕ */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
         <div className="text-center max-w-lg mx-auto mb-8 space-y-1">
           <h2 className="text-2xl font-black text-slate-950 tracking-tight">Категории за зареждане</h2>
@@ -341,7 +430,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 5. FLASH DEAL BANNER С ЖИВ ТАЙМЕР */}
+      {/* 6. FLASH DEAL BANNER С ЖИВ ТАЙМЕР */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
         <div className="rounded-3xl bg-slate-950 text-white p-8 sm:p-12 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 shadow-xl border border-slate-800">
           <div className="space-y-4 max-w-lg">
@@ -384,7 +473,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. КАТАЛОГ С ПРОДУКТИ */}
+      {/* 7. КАТАЛОГ С ПРОДУКТИ */}
       <section id="catalog-section" className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 border-b border-slate-200 pb-4">
           <div>
@@ -449,10 +538,14 @@ export default function HomePage() {
                         </span>
                       )}
 
-                      {/* Етикет за производител */}
-                      <span className="absolute bottom-3 left-3 bg-white/95 text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200">
-                        {p.supplierName}
-                      </span>
+                      {/* Етикет за производител С ДИРЕКТЕН ЛИНК КЪМ ПРОФИЛА МУ */}
+                      <Link
+                        href={`/brand/${encodeURIComponent(p.supplierName)}`}
+                        className="absolute bottom-3 left-3 bg-white/95 hover:bg-slate-900 hover:text-white text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200 transition-colors shadow-xs"
+                        title={`Виж всички продукти от ${p.supplierName}`}
+                      >
+                        {p.supplierName} &rarr;
+                      </Link>
                     </div>
 
                     {/* Данни за артикула */}
@@ -468,7 +561,7 @@ export default function HomePage() {
                         )}
                       </div>
 
-                      {/* Ценова табличка - ПОКАЗВА СЕ САМО ЗА ЛОГНАТИ */}
+                      {/* Ценова табличка */}
                       {user && (
                         <>
                           <div className="bg-slate-50 rounded-xl p-2.5 space-y-1 text-xs border border-slate-100">
@@ -551,7 +644,7 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* 7. TRUST BANNER FOOTER */}
+      {/* 8. TRUST BANNER FOOTER */}
       <section className="bg-white border-t border-slate-200 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left">
@@ -611,7 +704,7 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* 8. LIVE SOCIAL PROOF TOAST */}
+      {/* 9. LIVE SOCIAL PROOF TOAST */}
       {showToast && (
         <div className="fixed bottom-6 left-6 z-50 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl max-w-xs flex items-center gap-3 animate-in slide-in-from-bottom duration-300">
           <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
@@ -629,11 +722,10 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* 9. B2B WELCOME POPUP */}
+      {/* 10. B2B WELCOME POPUP */}
       {showWelcomePopup && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="relative bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 text-slate-900">
-            
             <button
               onClick={handleCloseWelcome}
               className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
