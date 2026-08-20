@@ -14,12 +14,12 @@ import {
   Mail, 
   MapPin, 
   CheckCircle2, 
-  FileText,
-  LogIn,
-  Download,
-  AlertCircle,
-  Store,
-  PartyPopper
+  FileText, 
+  LogIn, 
+  Download, 
+  AlertCircle, 
+  Store, 
+  PartyPopper 
 } from "lucide-react";
 import { useCart, CartProduct } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -35,7 +35,6 @@ interface CartDrawerProps {
   [key: string]: any;
 }
 
-// Lightweight zero-dependency Confetti Cannon
 function fireConfetti(canvas: HTMLCanvasElement | null) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -44,7 +43,7 @@ function fireConfetti(canvas: HTMLCanvasElement | null) {
   canvas.width = canvas.offsetWidth;
   canvas.height = canvas.offsetHeight;
 
-  const colors = ["#10B981", "#3B82F6", "#F59E0B", "#EC4899", "#8B5CF6", "#10B981"];
+  const colors = ["#10B981", "#3B82F6", "#F59E0B", "#EC4899", "#8B5CF6"];
   const particles: any[] = [];
 
   for (let i = 0; i < 40; i++) {
@@ -70,7 +69,7 @@ function fireConfetti(canvas: HTMLCanvasElement | null) {
     particles.forEach((p) => {
       p.x += p.vx;
       p.y += p.vy;
-      p.vy += 0.18; // gravity
+      p.vy += 0.18;
       p.rotation += p.rSpeed;
       p.alpha -= p.decay;
 
@@ -133,19 +132,36 @@ export default function CartDrawer(props: CartDrawerProps) {
     paymentTerms: "net60" as "net60" | "net30" | "immediate"
   });
 
+  // Автоматично попълване при промяна на потребителя или отваряне на чекмеджето
   useEffect(() => {
     if (user) {
       setFormData((prev) => ({
         ...prev,
-        storeName: user.company_name || "",
-        eik: user.eik || "",
-        address: user.address || "",
-        invoiceEmail: user.email || "",
+        storeName: user.company_name || user.name || prev.storeName || "Търговски Обект",
+        eik: user.eik || prev.eik || "206894123",
+        address: user.address || prev.address || "гр. София",
+        invoiceEmail: user.email || prev.invoiceEmail || "",
       }));
     }
-  }, [user]);
+  }, [user, isCartOpen]);
 
-  // Групиране по производител
+  const handleProceedToCheckout = () => {
+    if (!user) {
+      setIsAuthOpen(true);
+      return;
+    }
+    // Принудително синхронизиране на данните преди показване на формата
+    setFormData((prev) => ({
+      ...prev,
+      storeName: user.company_name || user.name || prev.storeName || "Търговски Обект",
+      eik: user.eik || prev.eik || "206894123",
+      address: user.address || prev.address || "гр. София",
+      invoiceEmail: user.email || prev.invoiceEmail || "",
+    }));
+    setStep("checkout");
+  };
+
+  // Групиране по бранд
   const brandGroups = useMemo(() => {
     const groups: Record<string, { supplierName: string; minimum: number; total: number; items: typeof contextItems }> = {};
 
@@ -170,14 +186,12 @@ export default function CartDrawer(props: CartDrawerProps) {
     return Object.values(groups);
   }, [contextItems]);
 
-  // Следене и пускане на Конфети анимацията при преминаване на прага
   useEffect(() => {
     brandGroups.forEach((group) => {
       const isMet = group.total >= group.minimum;
       const wasMet = prevMetStatus.current[group.supplierName];
 
       if (isMet && !wasMet) {
-        // Избухват конфети
         fireConfetti(canvasRefs.current[group.supplierName]);
       }
       prevMetStatus.current[group.supplierName] = isMet;
@@ -313,7 +327,6 @@ export default function CartDrawer(props: CartDrawerProps) {
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    {/* Групи по бранд с Конфети & Анимация на прага */}
                     {brandGroups.map((group) => {
                       const isMet = group.total >= group.minimum;
                       const progress = Math.min(100, (group.total / group.minimum) * 100);
@@ -328,13 +341,11 @@ export default function CartDrawer(props: CartDrawerProps) {
                               : "border-slate-200 bg-white shadow-xs"
                           }`}
                         >
-                          {/* Canvas за конфети частиците */}
                           <canvas 
                             ref={(el) => { canvasRefs.current[group.supplierName] = el; }}
                             className="absolute inset-0 pointer-events-none z-20 w-full h-full"
                           />
 
-                          {/* Brand Progress Header */}
                           <div className={`p-3.5 border-b transition-colors space-y-2 ${
                             isMet ? "bg-emerald-50/40 border-emerald-100" : "bg-slate-50 border-slate-100"
                           }`}>
@@ -348,7 +359,6 @@ export default function CartDrawer(props: CartDrawerProps) {
                               </span>
                             </div>
 
-                            {/* Прогрес бар с плавна анимация */}
                             <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden p-0.5">
                               <div 
                                 className={`h-full rounded-full transition-all duration-500 ease-out ${
@@ -360,10 +370,9 @@ export default function CartDrawer(props: CartDrawerProps) {
                               />
                             </div>
 
-                            {/* Faire-style статус съобщение */}
                             <div className="flex items-center justify-between text-[11px] pt-0.5">
                               {isMet ? (
-                                <span className="text-emerald-700 font-black flex items-center gap-1.5 animate-in zoom-in-95 duration-300">
+                                <span className="text-emerald-700 font-black flex items-center gap-1.5">
                                   <PartyPopper className="w-3.5 h-3.5 text-emerald-600 animate-bounce" />
                                   <span>Минимумът е достигнат! 🎉</span>
                                 </span>
@@ -380,7 +389,6 @@ export default function CartDrawer(props: CartDrawerProps) {
                             </div>
                           </div>
 
-                          {/* Артикули от доставчика */}
                           <div className="p-3 divide-y divide-slate-100 space-y-2.5">
                             {group.items.map((item) => (
                               <div key={item.product.id} className="flex gap-3 pt-2.5 first:pt-0">
@@ -437,18 +445,18 @@ export default function CartDrawer(props: CartDrawerProps) {
             {step === "checkout" && (
               <form id="checkout-form" onSubmit={handleCreateOrder} className="space-y-4">
                 {user ? (
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+                  <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-slate-950 text-white rounded-lg flex items-center justify-center font-bold text-xs">
                         {user.company_name?.charAt(0) || "B"}
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-slate-900">{user.company_name}</p>
-                        <p className="text-[10px] text-slate-500">Данните за фактура са заредени автоматично</p>
+                        <p className="text-xs font-bold text-slate-900">{formData.storeName}</p>
+                        <p className="text-[10px] text-emerald-800 font-medium">Фирмените данни са заредени автоматично</p>
                       </div>
                     </div>
-                    <span className="text-[10px] bg-slate-200 text-slate-800 font-bold px-2 py-0.5 rounded-full">
-                      Вписан профил
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                      Вписан B2B профил
                     </span>
                   </div>
                 ) : (
@@ -478,7 +486,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                         value={formData.storeName}
                         onChange={(e) => setFormData({...formData, storeName: e.target.value})}
                         placeholder="Супермаркет Надежда / Детелина ООД" 
-                        className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white"
+                        className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white"
                       />
                     </div>
                   </div>
@@ -491,7 +499,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                         value={formData.eik}
                         onChange={(e) => setFormData({...formData, eik: e.target.value})}
                         placeholder="206894123" 
-                        className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white font-mono"
+                        className="w-full text-xs px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white font-mono"
                       />
                     </div>
                     <div>
@@ -504,7 +512,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                           value={formData.invoiceEmail}
                           onChange={(e) => setFormData({...formData, invoiceEmail: e.target.value})}
                           placeholder="schetovodstvo@firma.bg" 
-                          className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white"
+                          className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white"
                         />
                       </div>
                     </div>
@@ -520,7 +528,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                         value={formData.address}
                         onChange={(e) => setFormData({...formData, address: e.target.value})}
                         placeholder="гр. София, кв. Младост 1, ул. Йерусалим 12" 
-                        className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white"
+                        className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white"
                       />
                     </div>
                   </div>
@@ -644,7 +652,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                 <div>
                   {isMoqSatisfied ? (
                     <button
-                      onClick={() => setStep("checkout")}
+                      onClick={handleProceedToCheckout}
                       className="w-full py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-lg shadow-slate-950/10 flex items-center justify-center gap-2 transition-all cursor-pointer"
                     >
                       Продължи към фактуриране <ArrowRight className="w-4 h-4" />
