@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { 
   X, 
   Trash2, 
@@ -19,7 +19,7 @@ import {
   Download,
   AlertCircle,
   Store,
-  Truck
+  PartyPopper
 } from "lucide-react";
 import { useCart, CartProduct } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -33,6 +33,67 @@ interface CartDrawerProps {
   onClearCart?: () => void;
   apiBaseUrl?: string;
   [key: string]: any;
+}
+
+// Lightweight zero-dependency Confetti Cannon
+function fireConfetti(canvas: HTMLCanvasElement | null) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+
+  const colors = ["#10B981", "#3B82F6", "#F59E0B", "#EC4899", "#8B5CF6", "#10B981"];
+  const particles: any[] = [];
+
+  for (let i = 0; i < 40; i++) {
+    particles.push({
+      x: canvas.width / 2 + (Math.random() - 0.5) * 60,
+      y: 20,
+      vx: (Math.random() - 0.5) * 8,
+      vy: (Math.random() - 1.2) * 5,
+      size: Math.random() * 5 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rotation: Math.random() * 360,
+      rSpeed: (Math.random() - 0.5) * 10,
+      alpha: 1,
+      decay: Math.random() * 0.02 + 0.015
+    });
+  }
+
+  let animationFrame: number;
+  const render = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+
+    particles.forEach((p) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.18; // gravity
+      p.rotation += p.rSpeed;
+      p.alpha -= p.decay;
+
+      if (p.alpha > 0) {
+        alive = true;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rotation * Math.PI) / 180);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.7);
+        ctx.restore();
+      }
+    });
+
+    if (alive) {
+      animationFrame = requestAnimationFrame(render);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  render();
 }
 
 export default function CartDrawer(props: CartDrawerProps) {
@@ -61,6 +122,9 @@ export default function CartDrawer(props: CartDrawerProps) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState<any>(null);
 
+  const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
+  const prevMetStatus = useRef<Record<string, boolean>>({});
+
   const [formData, setFormData] = useState({
     storeName: "",
     eik: "",
@@ -81,7 +145,7 @@ export default function CartDrawer(props: CartDrawerProps) {
     }
   }, [user]);
 
-  // 1. Групиране на продуктите по бранд / доставчик
+  // Групиране по производител
   const brandGroups = useMemo(() => {
     const groups: Record<string, { supplierName: string; minimum: number; total: number; items: typeof contextItems }> = {};
 
@@ -106,7 +170,20 @@ export default function CartDrawer(props: CartDrawerProps) {
     return Object.values(groups);
   }, [contextItems]);
 
-  // 2. Проверка дали всички брандове отговарят на MOQ изискването
+  // Следене и пускане на Конфети анимацията при преминаване на прага
+  useEffect(() => {
+    brandGroups.forEach((group) => {
+      const isMet = group.total >= group.minimum;
+      const wasMet = prevMetStatus.current[group.supplierName];
+
+      if (isMet && !wasMet) {
+        // Избухват конфети
+        fireConfetti(canvasRefs.current[group.supplierName]);
+      }
+      prevMetStatus.current[group.supplierName] = isMet;
+    });
+  }, [brandGroups]);
+
   const unmetMoqBrands = brandGroups.filter((g) => g.total < g.minimum);
   const isMoqSatisfied = unmetMoqBrands.length === 0;
 
@@ -232,11 +309,11 @@ export default function CartDrawer(props: CartDrawerProps) {
                   <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
                     <ShoppingBag className="w-12 h-12 stroke-1 mb-3 text-slate-300" />
                     <p className="text-sm font-semibold text-slate-700">Количката е празна</p>
-                    <p className="text-xs text-slate-400 mt-1">Добавете стекове от каталога, за да презаредите обекта си.</p>
+                    <p className="text-xs text-slate-400 mt-1">Добавете стекове от каталога, за да оформите поръчка.</p>
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    {/* Групиране по производител с Faire-style MOQ прогрес барове */}
+                    {/* Групи по бранд с Конфети & Анимация на прага */}
                     {brandGroups.map((group) => {
                       const isMet = group.total >= group.minimum;
                       const progress = Math.min(100, (group.total / group.minimum) * 100);
@@ -245,13 +322,25 @@ export default function CartDrawer(props: CartDrawerProps) {
                       return (
                         <div 
                           key={group.supplierName} 
-                          className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs"
+                          className={`relative rounded-2xl border transition-all duration-300 overflow-hidden ${
+                            isMet 
+                              ? "border-emerald-200 bg-white shadow-sm ring-1 ring-emerald-500/10" 
+                              : "border-slate-200 bg-white shadow-xs"
+                          }`}
                         >
-                          {/* Brand Header с прогрес бар */}
-                          <div className="p-3.5 bg-slate-50 border-b border-slate-100 space-y-2">
+                          {/* Canvas за конфети частиците */}
+                          <canvas 
+                            ref={(el) => { canvasRefs.current[group.supplierName] = el; }}
+                            className="absolute inset-0 pointer-events-none z-20 w-full h-full"
+                          />
+
+                          {/* Brand Progress Header */}
+                          <div className={`p-3.5 border-b transition-colors space-y-2 ${
+                            isMet ? "bg-emerald-50/40 border-emerald-100" : "bg-slate-50 border-slate-100"
+                          }`}>
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-1.5">
-                                <Store className="w-3.5 h-3.5 text-slate-600" />
+                                <Store className="w-3.5 h-3.5 text-slate-700" />
                                 <span className="text-xs font-black text-slate-900">{group.supplierName}</span>
                               </div>
                               <span className="text-[11px] font-mono font-bold text-slate-700">
@@ -259,31 +348,39 @@ export default function CartDrawer(props: CartDrawerProps) {
                               </span>
                             </div>
 
-                            {/* Прогрес бар */}
-                            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                            {/* Прогрес бар с плавна анимация */}
+                            <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden p-0.5">
                               <div 
-                                className={`h-full transition-all duration-300 ${
-                                  isMet ? "bg-emerald-500" : "bg-amber-500"
+                                className={`h-full rounded-full transition-all duration-500 ease-out ${
+                                  isMet 
+                                    ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-sm" 
+                                    : "bg-slate-800"
                                 }`} 
                                 style={{ width: `${progress}%` }}
                               />
                             </div>
 
-                            {/* Статус съобщение */}
-                            <div className="flex items-center justify-between text-[10px]">
+                            {/* Faire-style статус съобщение */}
+                            <div className="flex items-center justify-between text-[11px] pt-0.5">
                               {isMet ? (
-                                <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                  <CheckCircle2 className="w-3 h-3" /> Минимумът за доставка е достигнат
+                                <span className="text-emerald-700 font-black flex items-center gap-1.5 animate-in zoom-in-95 duration-300">
+                                  <PartyPopper className="w-3.5 h-3.5 text-emerald-600 animate-bounce" />
+                                  <span>Минимумът е достигнат! 🎉</span>
                                 </span>
                               ) : (
-                                <span className="text-amber-700 font-bold flex items-center gap-1">
-                                  <AlertCircle className="w-3 h-3" /> Добавете още {remaining.toFixed(2)} лв. за праг
+                                <span className="text-slate-600 font-semibold flex items-center gap-1">
+                                  <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                                  <span>Остават още <strong className="text-slate-900 font-mono">{remaining.toFixed(2)} лв.</strong></span>
                                 </span>
                               )}
+
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                {isMet ? "Готово за изпращане" : `Мин. ${group.minimum.toFixed(0)} лв.`}
+                              </span>
                             </div>
                           </div>
 
-                          {/* Артикули от този бранд */}
+                          {/* Артикули от доставчика */}
                           <div className="p-3 divide-y divide-slate-100 space-y-2.5">
                             {group.items.map((item) => (
                               <div key={item.product.id} className="flex gap-3 pt-2.5 first:pt-0">
