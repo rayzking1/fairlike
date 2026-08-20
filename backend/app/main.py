@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -152,65 +153,93 @@ class CreateOrderRequest(BaseModel):
     total: float
     estimatedProfit: Optional[float] = 0.0
 
-# Функция за генериране на PDF и изпращане по имейл
+class UpdateOrderStatusRequest(BaseModel):
+    status: str
+
+# Помощна функция за генериране на PDF фактура в паметта
+def generate_order_invoice_pdf(order: models.Order, items_data: list) -> bytes:
+    issue_date = date.today()
+    payment_term = order.paymentTerms or "net60"
+    if payment_term == "net60":
+        due_date = issue_date + timedelta(days=60)
+        payment_label = "Net 60 дни"
+        doc_type = "B2B Фактура / Проформа"
+    elif payment_term == "net30":
+        due_date = issue_date + timedelta(days=30)
+        payment_label = "Net 30 дни"
+        doc_type = "B2B Фактура / Проформа"
+    else:
+        due_date = issue_date
+        payment_label = "Веднага (-2% отстъпка)"
+        doc_type = "B2B ДДС Фактура - Оригинал"
+
+    context = {
+        "doc_type_label": doc_type,
+        "invoice_number": f"1000{order.id}",
+        "issue_date": issue_date.strftime("%d.%m.%Y"),
+        "tax_event_date": issue_date.strftime("%d.%m.%Y"),
+        "payment_terms_label": payment_label,
+        "due_date": due_date.strftime("%d.%m.%Y"),
+        "supplier": {
+            "name": "OPTOM.BG / Официален Дистрибутор",
+            "eik": "206894123",
+            "vat_number": "BG206894123",
+            "address": "гр. София, бул. Цариградско шосе 115",
+            "mol": "Димитър Петров",
+            "iban": "BG80UNCR70001523984512",
+            "bank_name": "УниКредит Булбанк"
+        },
+        "buyer": {
+            "name": order.storeName,
+            "eik": order.eik or "Не е посочен",
+            "vat_number": f"BG{order.eik}" if order.eik else "Нерегистриран по ЗДДС",
+            "address": order.address,
+            "mol": order.storeName,
+            "email": order.invoiceEmail
+        },
+        "items": items_data,
+        "subtotal": order.subtotal,
+        "discount_percent": 2.0 if payment_term == "immediate" else 0.0,
+        "discount_amount": 0.0,
+        "taxable_base": order.subtotal,
+        "vat_rate": 20.0,
+        "vat_amount": order.vat,
+        "total_due": order.total
+    }
+
+    template = jinja_env.get_template("invoice_template.html")
+    rendered_html = template.render(**context)
+    pdf_io = io.BytesIO()
+    HTML(string=rendered_html).write_pdf(pdf_io)
+    return pdf_io.getvalue()
+
+# Функция за изпращане по имейл във фонов режим
 def send_order_confirmation_email(order_dict: dict, items_data: list):
     try:
-        issue_date = date.today()
         payment_term = order_dict.get("paymentTerms", "net60")
-        if payment_term == "net60":
-            due_date = issue_date + timedelta(days=60)
-            payment_label = "Net 60 дни"
-            doc_type = "B2B Фактура / Проформа"
-        elif payment_term == "net30":
-            due_date = issue_date + timedelta(days=30)
-            payment_label = "Net 30 дни"
-            doc_type = "B2B Фактура / Проформа"
-        else:
-            due_date = issue_date
-            payment_label = "Веднага (-2% отстъпка)"
-            doc_type = "B2B ДДС Фактура - Оригинал"
+        payment_label = (
+            "Net 60 дни" if payment_term == "net60"
+            else "Net 30 дни" if payment_term == "net30"
+            else "Веднага (-2% отстъпка)"
+        )
 
         pdf_bytes = None
         try:
-            context = {
-                "doc_type_label": doc_type,
-                "invoice_number": f"1000{order_dict['id']}",
-                "issue_date": issue_date.strftime("%d.%m.%Y"),
-                "tax_event_date": issue_date.strftime("%d.%m.%Y"),
-                "payment_terms_label": payment_label,
-                "due_date": due_date.strftime("%d.%m.%Y"),
-                "supplier": {
-                    "name": "OPTOM.BG / Официален Дистрибутор",
-                    "eik": "206894123",
-                    "vat_number": "BG206894123",
-                    "address": "гр. София, бул. Цариградско шосе 115",
-                    "mol": "Димитър Петров",
-                    "iban": "BG80UNCR70001523984512",
-                    "bank_name": "УниКредит Булбанк"
-                },
-                "buyer": {
-                    "name": order_dict["storeName"],
-                    "eik": order_dict.get("eik") or "Не е посочен",
-                    "vat_number": f"BG{order_dict['eik']}" if order_dict.get("eik") else "Нерегистриран по ЗДДС",
-                    "address": order_dict["address"],
-                    "mol": order_dict["storeName"],
-                    "email": order_dict["invoiceEmail"]
-                },
-                "items": items_data,
-                "subtotal": order_dict["subtotal"],
-                "discount_percent": 2.0 if payment_term == "immediate" else 0.0,
-                "discount_amount": 0.0,
-                "taxable_base": order_dict["subtotal"],
-                "vat_rate": 20.0,
-                "vat_amount": order_dict["vat"],
-                "total_due": order_dict["total"]
-            }
+            # Пресъздаване на фиктивен Order обект за PDF функцията
+            class DummyOrder:
+                pass
+            dummy = DummyOrder()
+            dummy.id = order_dict["id"]
+            dummy.storeName = order_dict["storeName"]
+            dummy.invoiceEmail = order_dict["invoiceEmail"]
+            dummy.address = order_dict["address"]
+            dummy.eik = order_dict.get("eik")
+            dummy.paymentTerms = order_dict.get("paymentTerms")
+            dummy.subtotal = order_dict["subtotal"]
+            dummy.vat = order_dict["vat"]
+            dummy.total = order_dict["total"]
 
-            template = jinja_env.get_template("invoice_template.html")
-            rendered_html = template.render(**context)
-            pdf_io = io.BytesIO()
-            HTML(string=rendered_html).write_pdf(pdf_io)
-            pdf_bytes = pdf_io.getvalue()
+            pdf_bytes = generate_order_invoice_pdf(dummy, items_data)
         except Exception as pdf_err:
             print(f"⚠️ Грешка при PDF генерацията: {str(pdf_err)}")
 
@@ -247,7 +276,7 @@ def send_order_confirmation_email(order_dict: dict, items_data: list):
     except Exception as e:
         print(f"❌ Грешка при изпращане на имейл: {str(e)}")
 
-# --- ЕНДПОЙНТИ С БАЗА ДАННИ ---
+# --- ЕНДПОЙНТИ ---
 
 @app.get("/")
 def root():
@@ -293,8 +322,6 @@ async def import_products(
 ):
     """
     Масов импорт на артикули от Excel (.xlsx, .xls) или CSV файл.
-    Очаквани колони: name, category, barcode, units_per_case, case_price, rrp_price
-    Опционални колони: supplier_name, supplier_minimum, image_url
     """
     filename_lower = file.filename.lower() if file.filename else ""
     if not (filename_lower.endswith(".csv") or filename_lower.endswith(".xlsx") or filename_lower.endswith(".xls")):
@@ -372,9 +399,15 @@ async def import_products(
     }
 
 @app.get("/api/orders")
-def get_orders(db: Session = Depends(get_db)):
-    """Връща всички поръчки от базата данни за бранд таблото"""
-    return db.query(models.Order).order_by(models.Order.created_at.desc()).all()
+def get_orders(email: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Връща списък с поръчки. 
+    Ако е подаден параметър ?email=..., връща само поръчките на съответния купувач.
+    """
+    query = db.query(models.Order)
+    if email:
+        query = query.filter(models.Order.invoiceEmail == email)
+    return query.order_by(models.Order.created_at.desc()).all()
 
 @app.post("/api/orders")
 def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -438,3 +471,44 @@ def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks
         "orderId": order_id,
         "message": "Поръчката е запазена в базата данни и е изпратена фактура по имейл."
     }
+
+@app.get("/api/orders/{order_id}/invoice")
+def download_order_invoice(order_id: str, db: Session = Depends(get_db)):
+    """Генерира и връща оригиналната PDF фактура за директно сваляне в браузъра"""
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Поръчката не е намерена")
+
+    order_items = db.query(models.OrderItem).filter(models.OrderItem.order_id == order_id).all()
+    items_data = []
+    for it in order_items:
+        prod = db.query(models.Product).filter(models.Product.id == it.product_id).first()
+        items_data.append({
+            "name": prod.name if prod else f"Артикул #{it.product_id}",
+            "pack_details": f"Стек от {prod.unitsPerCase} бр." if prod else "",
+            "ean": prod.barcode if prod else "N/A",
+            "quantity": it.quantity_cases,
+            "unit": "стека",
+            "unit_price": it.case_price,
+            "total_price": round(it.quantity_cases * it.case_price, 2)
+        })
+
+    pdf_bytes = generate_order_invoice_pdf(order, items_data)
+    pdf_stream = io.BytesIO(pdf_bytes)
+
+    return StreamingResponse(
+        pdf_stream,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Faktura_{order.id}.pdf"}
+    )
+
+@app.patch("/api/orders/{order_id}/status")
+def update_order_status(order_id: str, payload: UpdateOrderStatusRequest, db: Session = Depends(get_db)):
+    """Обновява статуса на поръчката (напр. 'shipped', 'delivered')"""
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Поръчката не е намерена")
+
+    order.status = payload.status
+    db.commit()
+    return {"status": "success", "orderId": order_id, "newStatus": payload.status}
