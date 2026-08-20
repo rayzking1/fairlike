@@ -310,7 +310,6 @@ async def import_products(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Грешка при четене на файла: {str(e)}")
 
-    # Стандартизиране на имената на колоните (малки букви, без интервали)
     df.columns = [str(col).strip().lower().replace(" ", "_") for col in df.columns]
 
     required_cols = {"name", "category", "barcode", "units_per_case", "case_price", "rrp_price"}
@@ -326,7 +325,6 @@ async def import_products(
 
     for _, row in df.iterrows():
         barcode_raw = str(row["barcode"]).strip()
-        # Премахване на десетична запетая от числов баркод в Excel (напр. 7622210286124.0 -> 7622210286124)
         if barcode_raw.endswith(".0"):
             barcode_raw = barcode_raw[:-2]
 
@@ -336,7 +334,6 @@ async def import_products(
         existing_prod = db.query(models.Product).filter(models.Product.barcode == barcode_raw).first()
 
         if existing_prod:
-            # Обновяване на съществуващ продукт (UPSERT)
             existing_prod.name = str(row["name"]).strip()
             existing_prod.category = str(row["category"]).strip()
             existing_prod.unitsPerCase = int(row["units_per_case"])
@@ -350,7 +347,6 @@ async def import_products(
                 existing_prod.imageUrl = str(row["image_url"]).strip()
             updated_count += 1
         else:
-            # Добавяне на нов продукт
             new_prod = models.Product(
                 id=str(uuid.uuid4())[:8],
                 name=str(row["name"]).strip(),
@@ -442,4 +438,3 @@ def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks
         "orderId": order_id,
         "message": "Поръчката е запазена в базата данни и е изпратена фактура по имейл."
     }
-EOF
