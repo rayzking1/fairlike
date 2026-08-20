@@ -1,25 +1,53 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Store, Plus, Package, ArrowLeft, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { 
+  Building2, 
+  Package, 
+  PlusCircle, 
+  Upload, 
+  Clock, 
+  TrendingUp, 
+  DollarSign, 
+  CheckCircle2, 
+  ChevronLeft,
+  Truck
+} from "lucide-react";
+import CsvImportModal from "@/components/CsvImportModal";
+
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  barcode: string;
+  supplierName: string;
+  supplierMinimum: number;
+  unitsPerCase: number;
+  casePrice: number;
+  rrpPrice: number;
+  imageUrl: string;
+}
+
+interface Order {
+  id: string;
+  storeName: string;
+  invoiceEmail: string;
+  address: string;
+  eik?: string;
+  paymentTerms: string;
+  subtotal: number;
+  vat: number;
+  total: number;
+  status: string;
+  created_at: string;
+}
 
 export default function SupplierDashboard() {
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(true);
-
-  // Форма за нов продукт
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('Шоколади');
-  const [barcode, setBarcode] = useState('');
-  const [supplierName, setSupplierName] = useState('');
-  const [supplierMinimum, setSupplierMinimum] = useState('50');
-  const [unitsPerCase, setUnitsPerCase] = useState('24');
-  const [casePrice, setCasePrice] = useState('');
-  const [rrpPrice, setRrpPrice] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMsg, setSuccessMsg] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const getApiBaseUrl = () => {
     if (process.env.NEXT_PUBLIC_API_URL) {
@@ -31,204 +59,204 @@ export default function SupplierDashboard() {
         return `https://${currentHost.replace('-3000.app.github.dev', '-8000.app.github.dev')}`;
       }
     }
-    return 'http://127.0.0.1:8000';
+    return "https://fairlike.onrender.com";
   };
 
-  const fetchOrders = async () => {
+  const fetchData = async () => {
+    setLoading(true);
+    const baseUrl = getApiBaseUrl();
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/orders`);
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(data);
-      }
-    } catch (err) {
-      console.error(err);
+      const [prodRes, orderRes] = await Promise.all([
+        fetch(`${baseUrl}/api/products`),
+        fetch(`${baseUrl}/api/orders`)
+      ]);
+      if (prodRes.ok) setProducts(await prodRes.json());
+      if (orderRes.ok) setOrders(await orderRes.json());
+    } catch (e) {
+      console.error("Грешка при зареждане:", e);
     } finally {
-      setLoadingOrders(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchOrders();
+    fetchData();
   }, []);
 
-  const handleAddProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setSuccessMsg(false);
-
-    const payload = {
-      name,
-      category,
-      barcode,
-      supplierName,
-      supplierMinimum: parseFloat(supplierMinimum) || 50,
-      unitsPerCase: parseInt(unitsPerCase) || 1,
-      casePrice: parseFloat(casePrice),
-      rrpPrice: parseFloat(rrpPrice),
-      imageUrl: imageUrl || 'https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80',
-    };
-
-    try {
-      const res = await fetch(`${getApiBaseUrl()}/api/products`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        setSuccessMsg(true);
-        setName('');
-        setBarcode('');
-        setCasePrice('');
-        setRrpPrice('');
-        setImageUrl('');
-      }
-    } catch (err) {
-      console.error('Грешка при добавяне:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const totalVolume = orders.reduce((sum, o) => sum + o.total, 0);
 
   return (
-    <div className="min-h-screen bg-neutral-900 text-white pb-20">
-      <header className="border-b border-neutral-800 px-6 py-4 bg-neutral-950 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="p-2 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-white transition-colors">
-            <ArrowLeft size={20} />
-          </Link>
-          <div className="flex items-center gap-2">
-            <Store className="h-6 w-6 text-emerald-400" />
-            <span className="font-black tracking-tight text-lg">OPTOM.BG // Brand Portal</span>
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
+      {/* Топ навигация */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/" 
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" /> Към магазина
+            </Link>
+            <div className="h-4 w-px bg-slate-200" />
+            <div className="flex items-center gap-2">
+              <div className="bg-blue-600 text-white p-1.5 rounded-lg">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <h1 className="text-base font-extrabold tracking-tight">Портал за Производители & Дистрибутори</h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsImportOpen(true)}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm hover:shadow transition-all cursor-pointer"
+            >
+              <Upload className="w-4 h-4" /> Масов импорт на ценова листа
+            </button>
           </div>
         </div>
-        <span className="text-xs bg-neutral-800 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full">
-          Производител & Дистрибутор
-        </span>
       </header>
 
-      <main className="max-w-6xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
-        {/* Форма за качване на артикул */}
-        <div className="lg:col-span-5 bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <Plus size={20} className="text-emerald-400" />
-            <h2 className="font-bold text-base">Листване на нов стек/артикул</h2>
+      <main className="max-w-7xl mx-auto px-4 pt-6 space-y-6">
+        {/* KPI Картодържачи */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Общ оборот от заявки</p>
+              <h3 className="text-2xl font-black text-slate-900 mt-1">{totalVolume.toFixed(2)} лв.</h3>
+            </div>
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+              <DollarSign className="w-6 h-6" />
+            </div>
           </div>
-          <p className="text-xs text-neutral-400">
-            Добавените артикули стават моментално достъпни за сканиране и поръчка от кварталните магазини.
-          </p>
 
-          {successMsg && (
-            <div className="bg-emerald-950/50 border border-emerald-500/50 p-3 rounded-xl flex items-center gap-2 text-emerald-300 text-xs">
-              <CheckCircle2 size={16} /> Продуктът е добавен успешно в каталога!
-            </div>
-          )}
-
-          <form onSubmit={handleAddProduct} className="space-y-3 text-xs">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
-              <label className="text-neutral-400 block mb-1">Име на артикула</label>
-              <input required placeholder="напр. Вафла Боровец 55g" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 outline-none focus:border-emerald-500" />
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Входящи B2B поръчки</p>
+              <h3 className="text-2xl font-black text-slate-900 mt-1">{orders.length} бр.</h3>
             </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-neutral-400 block mb-1">Категория</label>
-                <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 outline-none focus:border-emerald-500 text-white">
-                  <option value="Шоколади">Шоколади</option>
-                  <option value="Снаксове">Снаксове</option>
-                  <option value="Напитки">Напитки</option>
-                  <option value="Сладки изделия">Сладки изделия</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-neutral-400 block mb-1">EAN-13 Баркод</label>
-                <input required placeholder="3800000000000" value={barcode} onChange={(e) => setBarcode(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 outline-none focus:border-emerald-500" />
-              </div>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+              <Clock className="w-6 h-6" />
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-neutral-400 block mb-1">Име на производител</label>
-                <input required placeholder="напр. Монделийз" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 outline-none focus:border-emerald-500" />
-              </div>
-              <div>
-                <label className="text-neutral-400 block mb-1">Мин. праг за поръчка (лв.)</label>
-                <input required type="number" placeholder="50" value={supplierMinimum} onChange={(e) => setSupplierMinimum(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 outline-none focus:border-emerald-500" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="text-neutral-400 block mb-1">Бр. в стек</label>
-                <input required type="number" placeholder="24" value={unitsPerCase} onChange={(e) => setUnitsPerCase(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 outline-none focus:border-emerald-500" />
-              </div>
-              <div>
-                <label className="text-neutral-400 block mb-1">Едрова стек (лв.)</label>
-                <input required type="number" step="0.01" placeholder="38.40" value={casePrice} onChange={(e) => setCasePrice(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 outline-none focus:border-emerald-500" />
-              </div>
-              <div>
-                <label className="text-neutral-400 block mb-1">Препоръчителна RRP</label>
-                <input required type="number" step="0.01" placeholder="2.29" value={rrpPrice} onChange={(e) => setRrpPrice(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 outline-none focus:border-emerald-500" />
-              </div>
-            </div>
-
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
-              <label className="text-neutral-400 block mb-1">Линк към снимка на продукта</label>
-              <input placeholder="https://..." value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-2.5 outline-none focus:border-emerald-500" />
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Артикули в каталог</p>
+              <h3 className="text-2xl font-black text-slate-900 mt-1">{products.length} бр.</h3>
             </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-3 rounded-xl flex items-center justify-center gap-2 mt-4 transition-colors"
-            >
-              {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Публикувай артикул в OPTOM.BG'}
-            </button>
-          </form>
+            <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
+              <Package className="w-6 h-6" />
+            </div>
+          </div>
         </div>
 
-        {/* Списък с входящи заявки от магазини */}
-        <div className="lg:col-span-7 bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Package size={20} className="text-emerald-400" />
-              <h2 className="font-bold text-base">Входящи заявки за доставка</h2>
+        {/* Секция: Всички артикули в каталога */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Вашият активен B2B каталог</h2>
+              <p className="text-xs text-slate-500">Артикули, достъпни за зареждане от магазините в реално време</p>
             </div>
-            <button onClick={fetchOrders} className="text-xs text-neutral-400 hover:text-white underline">
-              Обнови
+            <button
+              onClick={() => setIsImportOpen(true)}
+              className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 cursor-pointer"
+            >
+              <PlusCircle className="w-4 h-4" /> Добави нови артикули
             </button>
           </div>
 
-          {loadingOrders ? (
-            <div className="py-20 text-center text-neutral-500 text-xs">Зареждане на поръчки...</div>
-          ) : orders.length === 0 ? (
-            <div className="py-20 text-center text-neutral-500 text-xs">Все още няма получени заявки.</div>
-          ) : (
-            <div className="space-y-3">
-              {orders.map((ord: any) => (
-                <div key={ord.orderId} className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-emerald-400">#{ord.orderId}</span>
-                    <span className="bg-neutral-800 px-2.5 py-0.5 rounded-full text-[10px] text-neutral-300 font-semibold">
-                      {ord.paymentTerms === 'net60' ? 'Net 60 дни' : ord.paymentTerms === 'net30' ? 'Net 30 дни' : 'Предплатено'}
-                    </span>
-                  </div>
-                  <div className="text-neutral-300">
-                    <p className="font-semibold text-white">{ord.storeName} {ord.eik ? `(ЕИК: ${ord.eik})` : ''}</p>
-                    <p className="text-[11px] text-neutral-400">{ord.address}</p>
-                    <p className="text-[11px] text-neutral-400">Имейл за фактура: {ord.invoiceEmail}</p>
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
-                    <span className="text-neutral-400">Обща сума с ДДС:</span>
-                    <span className="font-bold text-white text-sm">{ord.total.toFixed(2)} лв.</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-4">Артикул</th>
+                  <th className="py-3 px-4">Категория</th>
+                  <th className="py-3 px-4">Баркод (EAN)</th>
+                  <th className="py-3 px-4">Бр. в стек</th>
+                  <th className="py-3 px-4">Цена стек (без ДДС)</th>
+                  <th className="py-3 px-4">Препор. цена / бр.</th>
+                  <th className="py-3 px-4">Доставчик</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {products.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                      <img src={p.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover bg-slate-100" />
+                      <span>{p.name}</span>
+                    </td>
+                    <td className="py-3 px-4 text-slate-600">{p.category}</td>
+                    <td className="py-3 px-4 font-mono text-slate-500">{p.barcode}</td>
+                    <td className="py-3 px-4 font-semibold text-slate-700">{p.unitsPerCase} бр.</td>
+                    <td className="py-3 px-4 font-bold text-blue-600">{p.casePrice.toFixed(2)} лв.</td>
+                    <td className="py-3 px-4 text-slate-700">{p.rrpPrice.toFixed(2)} лв.</td>
+                    <td className="py-3 px-4 text-slate-500">{p.supplierName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Секция: Входящи B2B поръчки */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100">
+            <h2 className="text-base font-bold text-slate-900">Входящи заявки за презареждане</h2>
+            <p className="text-xs text-slate-500">Списък с поръчки, генерирани от търговски обекти</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-4">Поръчка #</th>
+                  <th className="py-3 px-4">Магазин / Обект</th>
+                  <th className="py-3 px-4">Адрес на доставка</th>
+                  <th className="py-3 px-4">Условия</th>
+                  <th className="py-3 px-4">Сума с ДДС</th>
+                  <th className="py-3 px-4">Статус</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {orders.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-400 font-medium">
+                      Все още няма входящи поръчки.
+                    </td>
+                  </tr>
+                ) : (
+                  orders.map((o) => (
+                    <tr key={o.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900">#{o.id}</td>
+                      <td className="py-3 px-4 font-bold text-slate-800">{o.storeName}</td>
+                      <td className="py-3 px-4 text-slate-600">{o.address}</td>
+                      <td className="py-3 px-4 text-slate-600 uppercase font-semibold text-[11px]">
+                        {o.paymentTerms === "immediate" ? "Веднага (-2%)" : o.paymentTerms === "net30" ? "Net 30 дни" : "Net 60 дни"}
+                      </td>
+                      <td className="py-3 px-4 font-bold text-emerald-600">{o.total.toFixed(2)} лв.</td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded-lg text-[11px] font-bold">
+                          <Truck className="w-3 h-3" /> Чака доставка
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </main>
+
+      {/* Модал за импорт */}
+      <CsvImportModal 
+        isOpen={isImportOpen} 
+        onClose={() => setIsImportOpen(false)} 
+        onSuccess={() => {
+          fetchData();
+        }} 
+      />
     </div>
   );
 }
