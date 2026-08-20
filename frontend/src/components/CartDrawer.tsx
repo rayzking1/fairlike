@@ -132,30 +132,37 @@ export default function CartDrawer(props: CartDrawerProps) {
     paymentTerms: "net60" as "net60" | "net30" | "immediate"
   });
 
-  useEffect(() => {
-    if (user) {
+  // Автоматично попълване от User профила
+  const syncUserData = () => {
+    let rawUser: any = user;
+    if (!rawUser && typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("b2b_user") || localStorage.getItem("auth_user");
+        if (stored) rawUser = JSON.parse(stored);
+      } catch (e) {}
+    }
+
+    if (rawUser) {
       setFormData((prev) => ({
         ...prev,
-        storeName: user.company_name || prev.storeName || "Търговски Обект",
-        eik: user.eik || prev.eik || "206894123",
-        address: user.address || prev.address || "гр. София",
-        invoiceEmail: user.email || prev.invoiceEmail || "",
+        storeName: rawUser.company_name || rawUser.companyName || rawUser.storeName || prev.storeName || "Търговски Обект",
+        eik: rawUser.eik || prev.eik || "206894123",
+        address: rawUser.address || prev.address || "гр. София",
+        invoiceEmail: rawUser.email || prev.invoiceEmail || "",
       }));
     }
-  }, [user, isCartOpen]);
+  };
+
+  useEffect(() => {
+    syncUserData();
+  }, [user, isCartOpen, step]);
 
   const handleProceedToCheckout = () => {
     if (!user) {
       setIsAuthOpen(true);
       return;
     }
-    setFormData((prev) => ({
-      ...prev,
-      storeName: user.company_name || prev.storeName || "Търговски Обект",
-      eik: user.eik || prev.eik || "206894123",
-      address: user.address || prev.address || "гр. София",
-      invoiceEmail: user.email || prev.invoiceEmail || "",
-    }));
+    syncUserData();
     setStep("checkout");
   };
 
@@ -229,10 +236,10 @@ export default function CartDrawer(props: CartDrawerProps) {
 
     const baseUrl = getApiBaseUrl();
     const orderPayload = {
-      storeName: formData.storeName,
-      invoiceEmail: formData.invoiceEmail,
-      address: formData.address,
-      eik: formData.eik,
+      storeName: formData.storeName || (user?.company_name) || "Търговски Обект",
+      invoiceEmail: formData.invoiceEmail || (user?.email) || "",
+      address: formData.address || (user?.address) || "гр. София",
+      eik: formData.eik || (user?.eik) || "206894123",
       paymentTerms: formData.paymentTerms,
       items: items.map(it => ({
         productId: it.product.id,
@@ -447,7 +454,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                         {user.company_name?.charAt(0) || "B"}
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-slate-900">{formData.storeName}</p>
+                        <p className="text-xs font-bold text-slate-900">{formData.storeName || user.company_name}</p>
                         <p className="text-[10px] text-emerald-800 font-medium">Фирмените данни са заредени автоматично</p>
                       </div>
                     </div>
@@ -479,10 +486,10 @@ export default function CartDrawer(props: CartDrawerProps) {
                       <input 
                         type="text" 
                         required
-                        value={formData.storeName}
+                        value={formData.storeName || user?.company_name || ""}
                         onChange={(e) => setFormData({...formData, storeName: e.target.value})}
                         placeholder="Супермаркет Надежда / Детелина ООД" 
-                        className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white"
+                        className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white font-medium"
                       />
                     </div>
                   </div>
@@ -492,7 +499,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                       <label className="block text-xs font-bold text-slate-700 mb-1">ЕИК / БУЛСТАТ</label>
                       <input 
                         type="text" 
-                        value={formData.eik}
+                        value={formData.eik || user?.eik || ""}
                         onChange={(e) => setFormData({...formData, eik: e.target.value})}
                         placeholder="206894123" 
                         className="w-full text-xs px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white font-mono"
@@ -505,10 +512,10 @@ export default function CartDrawer(props: CartDrawerProps) {
                         <input 
                           type="email" 
                           required
-                          value={formData.invoiceEmail}
+                          value={formData.invoiceEmail || user?.email || ""}
                           onChange={(e) => setFormData({...formData, invoiceEmail: e.target.value})}
                           placeholder="schetovodstvo@firma.bg" 
-                          className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white"
+                          className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white font-medium"
                         />
                       </div>
                     </div>
@@ -521,10 +528,10 @@ export default function CartDrawer(props: CartDrawerProps) {
                       <input 
                         type="text" 
                         required
-                        value={formData.address}
+                        value={formData.address || user?.address || ""}
                         onChange={(e) => setFormData({...formData, address: e.target.value})}
                         placeholder="гр. София, кв. Младост 1, ул. Йерусалим 12" 
-                        className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white"
+                        className="w-full text-xs pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-950 focus:bg-white font-medium"
                       />
                     </div>
                   </div>
@@ -587,7 +594,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 my-4 w-full text-left text-xs space-y-2">
                   <p className="text-slate-600 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Фактурата е изпратена на: <strong>{formData.invoiceEmail}</strong></span>
+                    <span>Фактурата е изпратена на: <strong>{formData.invoiceEmail || user?.email}</strong></span>
                   </p>
                   <p className="text-slate-600 flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
