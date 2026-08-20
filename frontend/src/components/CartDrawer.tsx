@@ -132,12 +132,11 @@ export default function CartDrawer(props: CartDrawerProps) {
     paymentTerms: "net60" as "net60" | "net30" | "immediate"
   });
 
-  // Автоматично попълване при промяна на потребителя или отваряне на чекмеджето
   useEffect(() => {
     if (user) {
       setFormData((prev) => ({
         ...prev,
-        storeName: user.company_name || user.name || prev.storeName || "Търговски Обект",
+        storeName: user.company_name || prev.storeName || "Търговски Обект",
         eik: user.eik || prev.eik || "206894123",
         address: user.address || prev.address || "гр. София",
         invoiceEmail: user.email || prev.invoiceEmail || "",
@@ -150,10 +149,9 @@ export default function CartDrawer(props: CartDrawerProps) {
       setIsAuthOpen(true);
       return;
     }
-    // Принудително синхронизиране на данните преди показване на формата
     setFormData((prev) => ({
       ...prev,
-      storeName: user.company_name || user.name || prev.storeName || "Търговски Обект",
+      storeName: user.company_name || prev.storeName || "Търговски Обект",
       eik: user.eik || prev.eik || "206894123",
       address: user.address || prev.address || "гр. София",
       invoiceEmail: user.email || prev.invoiceEmail || "",
@@ -161,7 +159,6 @@ export default function CartDrawer(props: CartDrawerProps) {
     setStep("checkout");
   };
 
-  // Групиране по бранд
   const brandGroups = useMemo(() => {
     const groups: Record<string, { supplierName: string; minimum: number; total: number; items: typeof contextItems }> = {};
 
@@ -295,7 +292,6 @@ export default function CartDrawer(props: CartDrawerProps) {
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
         <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col text-slate-800">
           
-          {/* Header */}
           <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-5 h-5 text-slate-900" />
