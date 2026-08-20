@@ -3,56 +3,94 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 export interface User {
-  id: string;
+  id?: string;
   email: string;
-  company_name: string;
-  eik: string;
-  address: string;
-  mol: string;
-  role: "retailer" | "supplier";
+  role: "retailer" | "supplier" | "admin";
+  company_name?: string;
+  companyName?: string;
+  storeName?: string;
+  name?: string;
+  eik?: string;
+  mol?: string;
+  address?: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
-  login: (token: string, user: User) => void;
-  logout: () => void;
   isAuthOpen: boolean;
   setIsAuthOpen: (open: boolean) => void;
+  login: (userDataOrEmail: User | string, roleOrCompany?: string) => void;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const AUTH_STORAGE_KEY = "optom_b2b_session";
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
+  // 1. Автоматично възстановяване на сесията при първоначално зареждане
   useEffect(() => {
-    const savedToken = localStorage.getItem("optom_token");
-    const savedUser = localStorage.getItem("optom_user");
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
+    try {
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY) || localStorage.getItem("b2b_user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.email) {
+          setUser(parsed);
+        }
+      }
+    } catch (e) {
+      console.error("Грешка при четене на запазената сесия:", e);
+    } finally {
+      setIsInitialized(true);
     }
   }, []);
 
-  const login = (newToken: string, newUser: User) => {
-    setToken(newToken);
-    setUser(newUser);
-    localStorage.setItem("optom_token", newToken);
-    localStorage.setItem("optom_user", JSON.stringify(newUser));
+  // 2. Вход и автоматично запазване в localStorage
+  const login = (userDataOrEmail: User | string, roleOrCompany?: string) => {
+    let finalUser: User;
+
+    if (typeof userDataOrEmail === "object") {
+      finalUser = userDataOrEmail;
+    } else {
+      const email = userDataOrEmail;
+      const role = (roleOrCompany === "supplier" ? "supplier" : "retailer") as "retailer" | "supplier";
+      const fallbackName = email.split("@")[0].toUpperCase();
+      
+      finalUser = {
+        email,
+        role,
+        company_name: `Търговски Обект (${fallbackName})`,
+        eik: "206894123",
+        mol: "Управител",
+        address: "гр. София, бул. България 1"
+      };
+    }
+
+    setUser(finalUser);
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(finalUser));
+      localStorage.setItem("b2b_user", JSON.stringify(finalUser));
+    } catch (e) {
+      console.error("Неуспешно записване на сесията:", e);
+    }
   };
 
+  // 3. Изход и изчистване на паметта
   const logout = () => {
-    setToken(null);
     setUser(null);
-    localStorage.removeItem("optom_token");
-    localStorage.removeItem("optom_user");
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem("b2b_user");
+      localStorage.removeItem("auth_user");
+    } catch (e) {}
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuthOpen, setIsAuthOpen }}>
+    <AuthContext.Provider value={{ user, isAuthOpen, setIsAuthOpen, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

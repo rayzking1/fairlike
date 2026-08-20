@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Eye, EyeOff, X, Building2, Store, Lock, Mail, Building, MapPin, CheckCircle2 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, User } from "@/context/AuthContext";
 
 export default function AuthModal() {
   const { isAuthOpen, setIsAuthOpen, login } = useAuth();
@@ -21,6 +21,16 @@ export default function AuthModal() {
   const [mol, setMol] = useState("");
   const [address, setAddress] = useState("");
 
+  // Зареждане на последно използвания имейл от браузъра
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedEmail = localStorage.getItem("optom_remembered_email");
+      if (savedEmail) {
+        setEmail(savedEmail);
+      }
+    }
+  }, [isAuthOpen]);
+
   if (!isAuthOpen) return null;
 
   const handleClose = () => {
@@ -31,8 +41,18 @@ export default function AuthModal() {
   const handleGoogleAuth = () => {
     setLoading(true);
     setTimeout(() => {
-      // Подаваме 2-та задължителни аргумента към login
-      (login as any)("store.manager@gmail.com", "retailer");
+      const demoUser: User = {
+        email: "store.manager@gmail.com",
+        company_name: "Супермаркет Надежда (Google)",
+        role: "retailer",
+        eik: "206894123",
+        mol: "Иван Иванов",
+        address: "гр. София, бул. Цариградско шосе 115"
+      };
+      if (rememberMe) {
+        localStorage.setItem("optom_remembered_email", demoUser.email);
+      }
+      login(demoUser);
       setLoading(false);
       handleClose();
     }, 600);
@@ -44,11 +64,22 @@ export default function AuthModal() {
     setError(null);
 
     try {
-      if (mode === "login") {
-        (login as any)(email, role);
+      if (rememberMe) {
+        localStorage.setItem("optom_remembered_email", email);
       } else {
-        (login as any)(email, role);
+        localStorage.removeItem("optom_remembered_email");
       }
+
+      const userData: User = {
+        email,
+        company_name: mode === "register" ? (companyName || email.split("@")[0]) : (companyName || "Моят Търговски Обект"),
+        role,
+        eik: eik || "206894123",
+        mol: mol || "Управител",
+        address: address || "гр. София"
+      };
+      
+      login(userData);
       handleClose();
     } catch (err: any) {
       setError(err.message || "Възникна грешка при автентикацията.");
@@ -60,7 +91,7 @@ export default function AuthModal() {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
       
-      {/* Основна бяла карта */}
+      {/* Основна карта */}
       <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-slate-100 text-slate-800 relative animate-in zoom-in-95 duration-200">
         
         {/* Лого */}
@@ -106,7 +137,6 @@ export default function AuthModal() {
           <span>Продължи с Google</span>
         </button>
 
-        {/* Разделителна линия "ИЛИ" */}
         <div className="relative flex items-center justify-center my-4">
           <div className="border-t border-slate-200 w-full" />
           <span className="bg-white px-3 text-[10px] font-extrabold uppercase text-slate-400 tracking-wider absolute">
@@ -120,8 +150,8 @@ export default function AuthModal() {
           </div>
         )}
 
-        {/* Форма */}
-        <form onSubmit={handleSubmit} className="space-y-3.5 text-left">
+        {/* Форма с вградена поддръжка за браузерно запаметяване и автопопълване */}
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-left" autoComplete="on">
           
           {mode === "register" && (
             <div className="space-y-3 pb-2 border-b border-slate-100">
@@ -154,6 +184,8 @@ export default function AuthModal() {
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">Име на фирмата / Обект *</label>
                 <input
                   type="text"
+                  name="organization"
+                  autoComplete="organization"
                   required
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
@@ -167,6 +199,7 @@ export default function AuthModal() {
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">ЕИК / БУЛСТАТ *</label>
                   <input
                     type="text"
+                    name="taxID"
                     required
                     value={eik}
                     onChange={(e) => setEik(e.target.value)}
@@ -178,6 +211,8 @@ export default function AuthModal() {
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">МОЛ *</label>
                   <input
                     type="text"
+                    name="name"
+                    autoComplete="name"
                     required
                     value={mol}
                     onChange={(e) => setMol(e.target.value)}
@@ -191,6 +226,8 @@ export default function AuthModal() {
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">Адрес на обекта / склад *</label>
                 <input
                   type="text"
+                  name="street-address"
+                  autoComplete="street-address"
                   required
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
@@ -206,6 +243,9 @@ export default function AuthModal() {
             <label className="block text-[11px] font-bold text-slate-700 mb-1">Имейл адрес *</label>
             <input
               type="email"
+              name="email"
+              id="email"
+              autoComplete="username email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -220,6 +260,9 @@ export default function AuthModal() {
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
+                name="password"
+                id="password"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -242,11 +285,12 @@ export default function AuthModal() {
               <label className="flex items-center gap-2 cursor-pointer text-slate-600 text-[11px]">
                 <input
                   type="checkbox"
+                  name="remember"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
                 />
-                <span>Запомни ме</span>
+                <span>Запомни ме на това устройство</span>
               </label>
 
               <button
@@ -299,7 +343,7 @@ export default function AuthModal() {
         </div>
       </div>
 
-      {/* Овален бутон "✕ Close" отдолу */}
+      {/* Овален бутон "✕ Close" */}
       <button
         type="button"
         onClick={handleClose}
