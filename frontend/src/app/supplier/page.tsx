@@ -120,7 +120,6 @@ export default function SupplierDashboardPage() {
       }
       if (productsRes.ok) {
         const pData = await productsRes.json();
-        // Всички продукти с по подразбиране inStock: true
         setProducts(pData.map((p: any) => ({ ...p, inStock: p.inStock !== false })));
       }
     } catch (e) {
@@ -166,7 +165,6 @@ export default function SupplierDashboardPage() {
         })
       });
 
-      // Локално обновяване
       setProducts((prev) =>
         prev.map((p) =>
           p.id === prodId ? { ...p, casePrice: editCasePrice, rrpPrice: editRrpPrice } : p
@@ -185,12 +183,12 @@ export default function SupplierDashboardPage() {
     }
   };
 
-  // Превключване на наличност (In Stock / Out of Stock)
+  // Превключване на наличност (PATCH към общия products endpoint)
   const handleToggleStock = async (prodId: string, currentStock: boolean) => {
     const nextStock = !currentStock;
     const baseUrl = getApiBaseUrl();
     try {
-      await fetch(`${baseUrl}/api/products/${prodId}/stock`, {
+      await fetch(`${baseUrl}/api/products/${prodId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inStock: nextStock })
@@ -211,6 +209,22 @@ export default function SupplierDashboardPage() {
     } catch (e) {}
 
     setProducts((prev) => prev.filter((p) => p.id !== prodId));
+  };
+
+  // Запазване на Brand MOQ за всички артикули на доставчика
+  const handleSaveMoq = async () => {
+    setMoqSaved(true);
+    const baseUrl = getApiBaseUrl();
+    try {
+      for (const prod of supplierProducts) {
+        await fetch(`${baseUrl}/api/products/${prod.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ supplierMinimum: brandMoq })
+        });
+      }
+    } catch (e) {}
+    setTimeout(() => setMoqSaved(false), 2000);
   };
 
   // Обработка на Excel файл
@@ -272,7 +286,7 @@ export default function SupplierDashboardPage() {
         rrpPrice: row.rrpPrice,
         unitsPerCase: row.unitsPerCase,
         category: row.category,
-        supplierName: user?.company_name || "Официален Производител",
+        supplierName: user?.company_name || user?.companyName || "Официален Производител",
         supplierMinimum: brandMoq,
         imageUrl: row.imageUrl
       };
@@ -386,10 +400,7 @@ export default function SupplierDashboardPage() {
                   />
                   <span className="text-xs font-bold text-slate-600">лв.</span>
                   <button
-                    onClick={() => {
-                      setMoqSaved(true);
-                      setTimeout(() => setMoqSaved(false), 2000);
-                    }}
+                    onClick={handleSaveMoq}
                     className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     {moqSaved ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Save className="w-3.5 h-3.5" />}
@@ -454,8 +465,7 @@ export default function SupplierDashboardPage() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
-        
-        {/* ТАБ 1: МОЯТ КАТАЛОГ, НАЛИЧНОСТИ И РЕДАКЦИЯ НА ЦЕНИ */}
+        {/* ТАБ 1: МОЯТ КАТАЛОГ */}
         {activeTab === "catalog" && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -518,7 +528,6 @@ export default function SupplierDashboardPage() {
 
                         return (
                           <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
-                            {/* Продукт */}
                             <td className="p-3.5 pl-5">
                               <div className="flex items-center gap-3">
                                 <img
@@ -533,17 +542,14 @@ export default function SupplierDashboardPage() {
                               </div>
                             </td>
 
-                            {/* Баркод */}
                             <td className="p-3.5 font-mono text-slate-500 text-[11px]">{p.barcode}</td>
 
-                            {/* Категория */}
                             <td className="p-3.5">
                               <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-semibold">
                                 {p.category}
                               </span>
                             </td>
 
-                            {/* Едрова цена */}
                             <td className="p-3.5">
                               {isEditing ? (
                                 <div className="flex items-center gap-1">
@@ -563,7 +569,6 @@ export default function SupplierDashboardPage() {
                               )}
                             </td>
 
-                            {/* Препоръчителна цена */}
                             <td className="p-3.5">
                               {isEditing ? (
                                 <div className="flex items-center gap-1">
@@ -583,14 +588,12 @@ export default function SupplierDashboardPage() {
                               )}
                             </td>
 
-                            {/* Марж */}
                             <td className="p-3.5">
                               <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                                 +{marginPercent}% (+{profit.toFixed(2)} лв.)
                               </span>
                             </td>
 
-                            {/* Превключвател за наличност */}
                             <td className="p-3.5 text-center">
                               <button
                                 onClick={() => handleToggleStock(p.id, p.inStock !== false)}
@@ -612,7 +615,6 @@ export default function SupplierDashboardPage() {
                               </button>
                             </td>
 
-                            {/* Действия */}
                             <td className="p-3.5 pr-5 text-right">
                               {isEditing ? (
                                 <div className="flex items-center justify-end gap-1.5">
@@ -662,7 +664,7 @@ export default function SupplierDashboardPage() {
           </div>
         )}
 
-        {/* ТАБ 2: ПОРЪЧКИ И СТАТУСИ */}
+        {/* ТАБ 2: ПОРЪЧКИ */}
         {activeTab === "orders" && (
           <div className="space-y-6">
             <div>
@@ -905,7 +907,7 @@ export default function SupplierDashboardPage() {
                 rrpPrice: parseFloat(newProduct.rrpPrice),
                 unitsPerCase: parseInt(newProduct.unitsPerCase, 10),
                 category: newProduct.category,
-                supplierName: user?.company_name || "Официален Производител",
+                supplierName: user?.company_name || user?.companyName || "Официален Производител",
                 supplierMinimum: brandMoq,
                 imageUrl: newProduct.imageUrl || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500"
               };
