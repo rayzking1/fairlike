@@ -76,6 +76,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setIsCartOpen(true);
   };
 
+  // Слушател за добавяне от външни компоненти (напр. LiveSearch)
+  useEffect(() => {
+    const handleGlobalAddToCart = (event: Event) => {
+      const customEvent = event as CustomEvent<CartProduct>;
+      if (customEvent.detail) {
+        addToCart(customEvent.detail, 1);
+      }
+    };
+
+    window.addEventListener("optom:add-to-cart", handleGlobalAddToCart);
+    return () => {
+      window.removeEventListener("optom:add-to-cart", handleGlobalAddToCart);
+    };
+  }, []);
+
   const updateQuantity = (productId: string, quantity: number) => {
     if (quantity <= 0) {
       removeFromCart(productId);
