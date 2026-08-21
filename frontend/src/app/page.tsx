@@ -1,5 +1,6 @@
 "use client";
 
+import LiveSearch from "@/components/LiveSearch";
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { 
