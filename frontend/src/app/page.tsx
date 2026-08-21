@@ -21,7 +21,8 @@ import {
   Award,
   Sparkles,
   X,
-  PackagePlus
+  PackagePlus,
+  ArrowUpRight
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
@@ -34,6 +35,41 @@ const CATEGORY_TILES = [
   { id: "Снаксове", name: "Чипс, Ядки & Солети", count: "24+ бранда", img: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80" },
   { id: "Шоколади", name: "Шоколади & Вафли", count: "40+ бранда", img: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80" },
   { id: "Кафе & Чай", name: "Кафе & Топли напитки", count: "18+ бранда", img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500&q=80" },
+];
+
+const FEATURED_BRANDS = [
+  { 
+    name: "Монделийз България", 
+    tagline: "Milka, Oreo, Barni, Tuc", 
+    category: "Шоколади & Сладки", 
+    moq: 50, 
+    badge: "Топ Марж +35%", 
+    img: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=600&q=80" 
+  },
+  { 
+    name: "Ред Бул Дистрибуция", 
+    tagline: "Red Bull Energy & Sugarfree", 
+    category: "Енергийни напитки", 
+    moq: 80, 
+    badge: "Бързооборотни", 
+    img: "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=600&q=80" 
+  },
+  { 
+    name: "Интерснак България", 
+    tagline: "Chio, Pom-Bär, Nutline", 
+    category: "Снаксове & Ядки", 
+    moq: 50, 
+    badge: "Високо търсене", 
+    img: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=600&q=80" 
+  },
+  { 
+    name: "Чипита България", 
+    tagline: "7 Days Max, Bake Rolls, Fineti", 
+    category: "Тестени & Кроасани", 
+    moq: 50, 
+    badge: "Заводски цени", 
+    img: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=600&q=80" 
+  },
 ];
 
 const RECENT_PURCHASES = [
@@ -83,11 +119,6 @@ export default function HomePage() {
       setShowWelcomePopup(false);
     }
   }, [user]);
-
-  const handleCloseWelcome = () => {
-    setShowWelcomePopup(false);
-    sessionStorage.setItem("optom_welcome_dismissed", "true");
-  };
 
   const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 32, seconds: 45 });
   useEffect(() => {
@@ -216,7 +247,7 @@ export default function HomePage() {
         <span>Директни заводски цени на стекове &bull; Безплатна палетна доставка над 300 лв. &bull; Net 60 условия</span>
       </div>
 
-      {/* 2. НАВИГАЦИЯ С ИНТЕГРИРАН LIVE SEARCH */}
+      {/* 2. НАВИГАЦИЯ */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-6">
           
@@ -232,7 +263,6 @@ export default function HomePage() {
             </div>
           </Link>
 
-          {/* Интерактивен Live Search Dropdown */}
           <div className="hidden md:flex flex-1 max-w-lg mx-4">
             <LiveSearch />
           </div>
@@ -337,12 +367,12 @@ export default function HomePage() {
             <div className="pt-2 flex flex-wrap items-center gap-3">
               <button 
                 onClick={() => {
-                  const el = document.getElementById("catalog-section");
+                  const el = document.getElementById("brands-section");
                   el?.scrollIntoView({ behavior: "smooth" });
                 }}
                 className="px-6 py-3.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider shadow-lg shadow-slate-950/20 flex items-center gap-2 transition-all cursor-pointer hover:gap-3"
               >
-                Разгледай каталога <ArrowRight className="w-4 h-4" />
+                Разгледай брандовете <ArrowRight className="w-4 h-4" />
               </button>
               
               {isSupplier ? (
@@ -391,7 +421,69 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 5. КАТЕГОРИИ ЗА ЗАРЕЖДАНЕ */}
+      {/* 5. FAIRE-STYLE БРАНДОВЕ & ПРОИЗВОДИТЕЛИ (STOREFRONTS) */}
+      <section id="brands-section" className="max-w-7xl mx-auto px-4 sm:px-8 py-8 border-t border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-900 text-white font-extrabold text-[10px] uppercase tracking-wider">
+                Faire Модел
+              </span>
+              <span className="text-xs font-bold text-emerald-700">Директно от производител</span>
+            </div>
+            <h2 className="text-2xl font-black text-slate-950 tracking-tight mt-1">
+              Официални Марки & Дистрибутори
+            </h2>
+          </div>
+          <span className="text-xs text-slate-500 font-medium">Кликнете върху бранд за пълния ценоразпис</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {FEATURED_BRANDS.map((brand) => (
+            <Link
+              key={brand.name}
+              href={`/brand/${encodeURIComponent(brand.name)}`}
+              className="group bg-white rounded-2xl border border-slate-200 hover:border-slate-950 p-5 transition-all duration-200 shadow-xs hover:shadow-xl flex flex-col justify-between"
+            >
+              <div>
+                <div className="relative aspect-16/9 rounded-xl overflow-hidden bg-slate-100 mb-4 border border-slate-100">
+                  <img
+                    src={brand.img}
+                    alt={brand.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <span className="absolute top-2.5 right-2.5 bg-slate-950/90 text-white font-black text-[9px] px-2 py-0.5 rounded-md shadow-sm">
+                    {brand.badge}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    {brand.category}
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                    MOQ: {brand.moq} лв.
+                  </span>
+                </div>
+
+                <h3 className="text-sm font-black text-slate-950 mt-1.5 group-hover:text-emerald-700 transition-colors">
+                  {brand.name}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                  {brand.tagline}
+                </p>
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-900 group-hover:text-emerald-700">
+                <span>Към каталога на бранда</span>
+                <ArrowUpRight className="w-4 h-4 transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* 6. КАТЕГОРИИ ЗА ЗАРЕЖДАНЕ */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
         <div className="text-center max-w-lg mx-auto mb-8 space-y-1">
           <h2 className="text-2xl font-black text-slate-950 tracking-tight">Категории за зареждане</h2>
@@ -429,7 +521,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. FLASH DEAL BANNER */}
+      {/* 7. FLASH DEAL BANNER */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
         <div className="rounded-3xl bg-slate-950 text-white p-8 sm:p-12 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 shadow-xl border border-slate-800">
           <div className="space-y-4 max-w-lg">
@@ -471,7 +563,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 7. КАТАЛОГ С ПРОДУКТИ */}
+      {/* 8. КАТАЛОГ С ПРОДУКТИ */}
       <section id="catalog-section" className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 border-b border-slate-200 pb-4">
           <div>
@@ -668,7 +760,7 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* 8. LIVE SOCIAL PROOF TOAST */}
+      {/* LIVE SOCIAL PROOF TOAST */}
       {showToast && (
         <div className="fixed bottom-6 left-6 z-50 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl max-w-xs flex items-center gap-3 animate-in slide-in-from-bottom duration-300">
           <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
