@@ -512,3 +512,44 @@ def update_order_status(order_id: str, payload: UpdateOrderStatusRequest, db: Se
     order.status = payload.status
     db.commit()
     return {"status": "success", "orderId": order_id, "newStatus": payload.status}
+
+
+# --- Управление на артикули (Редакция и Изтриване) ---
+
+class UpdateProductRequest(BaseModel):
+    casePrice: Optional[float] = None
+    rrpPrice: Optional[float] = None
+    inStock: Optional[bool] = None
+    supplierMinimum: Optional[float] = None
+
+@app.patch("/api/products/{product_id}")
+def update_product(product_id: str, payload: UpdateProductRequest, db: Session = Depends(get_db)):
+    """Обновява цени, наличност или MOQ на артикул"""
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Продуктът не е намерен")
+
+    if payload.casePrice is not None:
+        product.casePrice = payload.casePrice
+    if payload.rrpPrice is not None:
+        product.rrpPrice = payload.rrpPrice
+    if payload.inStock is not None:
+        if hasattr(product, "inStock"):
+            product.inStock = payload.inStock
+    if payload.supplierMinimum is not None:
+        product.supplierMinimum = payload.supplierMinimum
+
+    db.commit()
+    db.refresh(product)
+    return {"status": "success", "product": product}
+
+@app.delete("/api/products/{product_id}")
+def delete_product(product_id: str, db: Session = Depends(get_db)):
+    """Трайно изтрива артикул от каталога"""
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Продуктът не е намерен")
+
+    db.delete(product)
+    db.commit()
+    return {"status": "success", "message": f"Продукт #{product_id} беше успешно изтрит"}
