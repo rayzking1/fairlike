@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -281,6 +282,23 @@ def send_order_confirmation_email(order_dict: dict, items_data: list):
 @app.get("/")
 def root():
     return {"message": "OPTOM.BG Database API is running", "docs": "/docs"}
+
+
+@app.get("/api/products/search")
+def search_products(q: str = "", db: Session = Depends(get_db)):
+    """Live B2B търсене по име, баркод, доставчик или категория"""
+    if not q or len(q.strip()) == 0:
+        return []
+    
+    search_term = f"%{q.strip().lower()}%"
+    results = db.query(models.Product).filter(
+        (func.lower(models.Product.name).like(search_term)) |
+        (func.lower(models.Product.barcode).like(search_term)) |
+        (func.lower(models.Product.supplierName).like(search_term)) |
+        (func.lower(models.Product.category).like(search_term))
+    ).limit(10).all()
+    
+    return results
 
 @app.get("/api/products", response_model=List[ProductSchema])
 def get_products(db: Session = Depends(get_db)):
