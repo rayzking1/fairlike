@@ -1,10 +1,8 @@
 "use client";
 
-import LiveSearch from "@/components/LiveSearch";
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { 
-  Search, 
   ShoppingBag, 
   Truck, 
   ShieldCheck, 
@@ -27,6 +25,7 @@ import {
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
+import LiveSearch from "@/components/LiveSearch";
 import { useCart, CartProduct } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 
@@ -217,7 +216,7 @@ export default function HomePage() {
         <span>Директни заводски цени на стекове &bull; Безплатна палетна доставка над 300 лв. &bull; Net 60 условия</span>
       </div>
 
-      {/* 2. НАВИГАЦИЯ */}
+      {/* 2. НАВИГАЦИЯ С ИНТЕГРИРАН LIVE SEARCH */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-6">
           
@@ -233,17 +232,9 @@ export default function HomePage() {
             </div>
           </Link>
 
-          <div className="hidden md:flex flex-1 max-w-md mx-4">
-            <div className="relative w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Търси продукт, марка, вносител или баркод..."
-                className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-full text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-950 focus:bg-white focus:ring-2 focus:ring-slate-950/10 transition-all"
-              />
-            </div>
+          {/* Интерактивен Live Search Dropdown */}
+          <div className="hidden md:flex flex-1 max-w-lg mx-4">
+            <LiveSearch />
           </div>
 
           <div className="flex items-center gap-3">
