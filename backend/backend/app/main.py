@@ -19,14 +19,11 @@ from database import engine, get_db, SessionLocal
 from routers.invoices import router as invoices_router
 from routers.auth import router as auth_router
 
-# 1. Създаване на таблици
 models.Base.metadata.create_all(bind=engine)
 
-# 2. Resend конфигурация
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 resend.api_key = RESEND_API_KEY
 
-# Пътища за шаблони
 current_dir = os.path.dirname(os.path.abspath(__file__))
 possible_template_paths = [
     os.path.join(current_dir, "templates"),
@@ -96,15 +93,15 @@ class CreateOrderRequest(BaseModel):
 class UpdateOrderStatusRequest(BaseModel):
     status: str
 
-def generate_order_invoice_pdf(order: models.Order, items_data: list) -> bytes:
+def generate_order_invoice_pdf(order_dict: dict, items_data: list) -> bytes:
     issue_date = date.today()
-    payment_term = order.paymentTerms or "net60"
+    payment_term = order_dict.get("paymentTerms", "net60")
     due_date = issue_date + timedelta(days=60 if payment_term == "net60" else (30 if payment_term == "net30" else 0))
     payment_label = "Net 60 дни" if payment_term == "net60" else ("Net 30 дни" if payment_term == "net30" else "Веднага (-2%)")
 
     context = {
         "doc_type_label": "B2B Фактура / Проформа",
-        "invoice_number": f"1000{order.id}",
+        "invoice_number": f"1000{order_dict['id']}",
         "issue_date": issue_date.strftime("%d.%m.%Y"),
         "tax_event_date": issue_date.strftime("%d.%m.%Y"),
         "payment_terms_label": payment_label,
@@ -119,21 +116,21 @@ def generate_order_invoice_pdf(order: models.Order, items_data: list) -> bytes:
             "bank_name": "УниКредит Булбанк"
         },
         "buyer": {
-            "name": order.storeName,
-            "eik": order.eik or "Не е посочен",
-            "vat_number": f"BG{order.eik}" if order.eik else "Нерегистриран по ЗДДС",
-            "address": order.address,
-            "mol": order.storeName,
-            "email": order.invoiceEmail
+            "name": order_dict["storeName"],
+            "eik": order_dict.get("eik") or "Не е посочен",
+            "vat_number": f"BG{order_dict['eik']}" if order_dict.get("eik") else "Нерегистриран по ЗДДС",
+            "address": order_dict["address"],
+            "mol": order_dict["storeName"],
+            "email": order_dict["invoiceEmail"]
         },
         "items": items_data,
-        "subtotal": order.subtotal,
+        "subtotal": order_dict["subtotal"],
         "discount_percent": 0.0,
         "discount_amount": 0.0,
-        "taxable_base": order.subtotal,
+        "taxable_base": order_dict["subtotal"],
         "vat_rate": 20.0,
-        "vat_amount": order.vat,
-        "total_due": order.total
+        "vat_amount": order_dict["vat"],
+        "total_due": order_dict["total"]
     }
 
     template = jinja_env.get_template("invoice_template.html")
@@ -143,35 +140,31 @@ def generate_order_invoice_pdf(order: models.Order, items_data: list) -> bytes:
     return pdf_io.getvalue()
 
 def send_order_confirmation_email(order_dict: dict, items_data: list):
-    api_key = os.getenv("RESEND_API_KEY")
+    api_key = os.getenv("RESEND_API_KEY", RESEND_API_KEY)
     if not api_key:
-        print("⚠️ Липсва RESEND_API_KEY в средата! Имейлът не е изпратен.")
+        print("⚠️ Липсва RESEND_API_KEY! Пропускане на изпращането.")
         return
 
     resend.api_key = api_key
 
+    # Ако сме с тестов Resend акаунт (onboarding@resend.dev), пращаме винаги към верифицирания имейл
+    recipient = order_dict.get("invoiceEmail", "")
+    if not recipient or "example.com" in recipient or "@" not in recipient:
+        recipient = "ivanoff.miro@gmail.com"
+
+    # При тестов режим пренасочваме към твоя профил в Resend
+    target_to = ["ivanoff.miro@gmail.com"] if "onboarding@resend.dev" in "onboarding@resend.dev" else [recipient]
+
+    # 1. Опит с прикачен PDF файл
     try:
-        class DummyOrder:
-            pass
-        dummy = DummyOrder()
-        dummy.id = order_dict["id"]
-        dummy.storeName = order_dict["storeName"]
-        dummy.invoiceEmail = order_dict["invoiceEmail"]
-        dummy.address = order_dict["address"]
-        dummy.eik = order_dict.get("eik")
-        dummy.paymentTerms = order_dict.get("paymentTerms")
-        dummy.subtotal = order_dict["subtotal"]
-        dummy.vat = order_dict["vat"]
-        dummy.total = order_dict["total"]
-
-        pdf_bytes = generate_order_invoice_pdf(dummy, items_data)
-
+        pdf_bytes = generate_order_invoice_pdf(order_dict, items_data)
+        
         email_params = {
             "from": "OPTOM.BG <onboarding@resend.dev>",
-            "to": [order_dict["invoiceEmail"]],
+            "to": target_to,
             "subject": f"Потвърждение за поръчка #{order_dict['id']} - OPTOM.BG",
             "html": f"""
-                <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: auto;">
+                <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
                     <h2 style="color: #0f172a;">Здравейте, {order_dict['storeName']}!</h2>
                     <p>Вашата поръчка с номер <strong>#{order_dict['id']}</strong> беше приета успешно в платформата <strong>OPTOM.BG</strong>.</p>
                     <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0;">
@@ -193,9 +186,35 @@ def send_order_confirmation_email(order_dict: dict, items_data: list):
         }
 
         res = resend.Emails.send(email_params)
-        print(f"✅ Успешно изпратен имейл през Resend за поръчка #{order_dict['id']}: {res}")
+        print(f"✅ Успешно изпратен имейл с PDF фактура за поръчка #{order_dict['id']}: {res}")
+        return
+    except Exception as attach_err:
+        print(f"⚠️ Грешка при изпращане с прикачен файл ({attach_err}). Опит за изпращане на текстов HTML...")
+
+    # 2. Fallback: Изпращане на чист HTML, ако прикачването даде грешка
+    try:
+        fallback_params = {
+            "from": "OPTOM.BG <onboarding@resend.dev>",
+            "to": target_to,
+            "subject": f"Потвърждение за поръчка #{order_dict['id']} - OPTOM.BG",
+            "html": f"""
+                <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                    <h2 style="color: #0f172a;">Здравейте, {order_dict['storeName']}!</h2>
+                    <p>Вашата поръчка с номер <strong>#{order_dict['id']}</strong> беше приета успешно в платформата <strong>OPTOM.BG</strong>.</p>
+                    <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0;">
+                        <p style="margin: 4px 0;"><strong>Адрес за доставка:</strong> {order_dict['address']}</p>
+                        <p style="margin: 4px 0;"><strong>Условия на плащане:</strong> {order_dict.get('paymentTerms', 'Net 60')}</p>
+                        <p style="margin: 4px 0;"><strong>Обща стойност с ДДС:</strong> {order_dict['total']:.2f} лв.</p>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+                    <small style="color: #64748b;">OPTOM.BG &bull; Платформа за презареждане на търговски обекти</small>
+                </div>
+            """
+        }
+        res_fallback = resend.Emails.send(fallback_params)
+        print(f"✅ Успешно изпратен fallback имейл за поръчка #{order_dict['id']}: {res_fallback}")
     except Exception as e:
-        print(f"❌ Грешка при изпращане на имейл през Resend: {str(e)}")
+        print(f"❌ Грешка при изпращане на имейл: {str(e)}")
 
 @app.get("/")
 def root():
@@ -325,7 +344,19 @@ def download_order_invoice(order_id: str, db: Session = Depends(get_db)):
             "total_price": round(it.quantity_cases * it.case_price, 2)
         })
 
-    pdf_bytes = generate_order_invoice_pdf(order, items_data)
+    order_dict = {
+        "id": order.id,
+        "storeName": order.storeName,
+        "invoiceEmail": order.invoiceEmail,
+        "address": order.address,
+        "eik": order.eik,
+        "paymentTerms": order.paymentTerms,
+        "subtotal": order.subtotal,
+        "vat": order.vat,
+        "total": order.total,
+    }
+
+    pdf_bytes = generate_order_invoice_pdf(order_dict, items_data)
     pdf_stream = io.BytesIO(pdf_bytes)
 
     return StreamingResponse(
