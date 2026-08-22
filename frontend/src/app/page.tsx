@@ -90,6 +90,24 @@ export default function HomePage() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
 
+  // Скрол динамика
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrollY(window.scrollY);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
   useEffect(() => {
@@ -177,6 +195,10 @@ export default function HomePage() {
     setTimeout(() => setAddedAnimation(null), 1200);
   };
 
+  // Нежно, прогресивно разсейване на Hero банера при скрол
+  const heroOpacity = Math.max(0, 1 - scrollY / 500);
+  const heroTranslateY = scrollY * 0.15;
+
   return (
     <div className="min-h-screen bg-white text-[#121212] antialiased selection:bg-[#121212] selection:text-white">
       
@@ -246,9 +268,16 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* 3. HERO EDITORIAL SECTION */}
+      {/* 3. HERO СЕКЦИЯ С ПЛАВНО ПРЕМАХВАНЕ ПРИ СКРОЛ */}
       <section className="max-w-[1360px] mx-auto px-4 sm:px-8 py-6">
-        <div className="relative rounded-2xl overflow-hidden min-h-[460px] flex items-center bg-[#2B2825] shadow-xs">
+        <div 
+          style={{
+            opacity: heroOpacity,
+            transform: `translateY(${heroTranslateY}px)`,
+            willChange: "transform, opacity"
+          }}
+          className="relative rounded-2xl overflow-hidden min-h-[460px] flex items-center bg-[#2B2825] shadow-xs transition-opacity duration-75"
+        >
           <img 
             src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1600&q=80" 
             alt="FMCG Дистрибуция" 
@@ -283,7 +312,7 @@ export default function HomePage() {
       </section>
 
       {/* 4. FEATURED FMCG BRANDS */}
-      <section className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10">
+      <section className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10 transition-all duration-300">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl sm:text-2xl font-serif font-normal text-[#121212]">
             Официални производители & марки
@@ -298,9 +327,9 @@ export default function HomePage() {
             <Link
               key={brand.name}
               href={`/brand/${encodeURIComponent(brand.name)}`}
-              className="group flex flex-col space-y-2.5"
+              className="group flex flex-col space-y-2.5 hover:-translate-y-1 transition-transform duration-200"
             >
-              <div className="aspect-square rounded-xl overflow-hidden bg-[#FAF9F7] border border-[#EBE8E3] relative">
+              <div className="aspect-square rounded-xl overflow-hidden bg-[#FAF9F7] border border-[#EBE8E3] relative shadow-2xs">
                 <img
                   src={brand.img}
                   alt={brand.name}
@@ -323,7 +352,7 @@ export default function HomePage() {
       </section>
 
       {/* 5. BRAND STORY BANNER */}
-      <section className="bg-[#2E2824] text-[#F5F2EB] py-16 px-4 sm:px-8 my-8">
+      <section className="bg-[#2E2824] text-[#F5F2EB] py-16 px-4 sm:px-8 my-8 transition-all duration-300">
         <div className="max-w-[1360px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
           <div>
             <span className="text-[11px] font-mono tracking-widest uppercase text-[#C4B5A5]">
@@ -347,8 +376,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. BESTSELLERS CATALOG */}
-      <section id="catalog-grid" className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10">
+      {/* 6. BESTSELLERS CATALOG (ВИДИМ ВЕДНАГА) */}
+      <section id="catalog-grid" className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10 transition-all duration-300">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-xl sm:text-2xl font-serif font-normal text-[#121212]">
@@ -388,7 +417,7 @@ export default function HomePage() {
               return (
                 <div 
                   key={p.id}
-                  className="group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs"
+                  className="group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs hover:-translate-y-1 hover:shadow-md"
                 >
                   <div>
                     {/* Снимка */}
