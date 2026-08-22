@@ -49,7 +49,7 @@ def seed_initial_products():
                 models.Product(
                     id="1",
                     name="Шоколад Milka Alpine Milk 100g",
-                    category="Шоколади",
+                    category="Шоколади & Вафли",
                     barcode="7622210286124",
                     supplierName="Монделийз България",
                     supplierMinimum=50.0,
@@ -66,7 +66,7 @@ def seed_initial_products():
                 models.Product(
                     id="2",
                     name="Чипс Chio Паприка 140g",
-                    category="Снаксове",
+                    category="Чипс & Снаксове",
                     barcode="5900547001234",
                     supplierName="Интерснак България",
                     supplierMinimum=50.0,
@@ -83,7 +83,7 @@ def seed_initial_products():
                 models.Product(
                     id="3",
                     name="Енергийна напитка Red Bull 250ml",
-                    category="Напитки",
+                    category="Енергийни напитки",
                     barcode="9002490100070",
                     supplierName="Ред Бул Дистрибуция",
                     supplierMinimum=80.0,
@@ -100,7 +100,7 @@ def seed_initial_products():
                 models.Product(
                     id="4",
                     name="Кроасан 7 Days Max Какао 85g",
-                    category="Сладки изделия",
+                    category="Тестени & Кроасани",
                     barcode="5201360521204",
                     supplierName="Чипита България",
                     supplierMinimum=50.0,
@@ -149,6 +149,53 @@ app.add_middleware(
 
 app.include_router(invoices_router)
 app.include_router(auth_router)
+
+# --- ВАЛИДАЦИЯ НА БЪЛГАРСКИ ЕИК ПО АЛГОРИТЪМ НА ТЪРГОВСКИЯ РЕГИСТЪР ---
+def validate_bulgarian_eik(eik: str) -> bool:
+    cleaned = "".join(ch for ch in eik if ch.isdigit())
+    if len(cleaned) == 9:
+        weights1 = [1, 2, 3, 4, 5, 6, 7, 8]
+        s = sum(int(cleaned[i]) * weights1[i] for i in range(8))
+        rem = s % 11
+        if rem != 10:
+            return rem == int(cleaned[8])
+        weights2 = [3, 4, 5, 6, 7, 8, 9, 10]
+        s2 = sum(int(cleaned[i]) * weights2[i] for i in range(8))
+        rem2 = s2 % 11
+        check = 0 if rem2 == 10 else rem2
+        return check == int(cleaned[8])
+    elif len(cleaned) == 13:
+        if not validate_bulgarian_eik(cleaned[:9]):
+            return False
+        weights1 = [2, 7, 3, 5]
+        s = sum(int(cleaned[8 + i]) * weights1[i] for i in range(4))
+        rem = s % 11
+        if rem != 10:
+            return rem == int(cleaned[12])
+        weights2 = [4, 9, 5, 7]
+        s2 = sum(int(cleaned[8 + i]) * weights2[i] for i in range(4))
+        rem2 = s2 % 11
+        check = 0 if rem2 == 10 else rem2
+        return check == int(cleaned[12])
+    return False
+
+@app.get("/api/auth/validate-eik/{eik}")
+def validate_company_eik(eik: str):
+    cleaned = "".join(ch for ch in eik if ch.isdigit())
+    is_valid = validate_bulgarian_eik(cleaned)
+    if not is_valid and len(cleaned) not in (9, 13):
+        return {
+            "valid": False,
+            "eik": cleaned,
+            "vat_number": f"BG{cleaned}",
+            "message": "Невалиден формат на ЕИК (изискват се 9 или 13 цифри)"
+        }
+    return {
+        "valid": is_valid,
+        "eik": cleaned,
+        "vat_number": f"BG{cleaned}",
+        "message": "ЕИК номерът е валиден" if is_valid else "Невалидна контролна цифра по Търговски регистър"
+    }
 
 class ProductSchema(BaseModel):
     id: str
@@ -391,6 +438,118 @@ def add_product(item: ProductCreate, db: Session = Depends(get_db)):
     db.refresh(new_product)
     return new_product
 
+# --- ЕНДПОЙНТ ЗА МАСОВ ИМПОРТ НА EXCEL / CSV (.xlsx, .xls, .csv) ---
+@app.post("/api/products/import")
+async def import_products_file(
+    file: UploadFile = File(...),
+    current_user: Optional[models.User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        contents = await file.read()
+        filename = file.filename.lower()
+
+        if filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(contents))
+        elif filename.endswith((".xlsx", ".xls")):
+            df = pd.read_excel(io.BytesIO(contents))
+        else:
+            raise HTTPException(status_code=400, detail="Неподдържан файлов формат. Качете .xlsx, .xls или .csv")
+
+        # Нормализиране на имената на колоните
+        col_map = {
+            "име на артикул": "name",
+            "име": "name",
+            "name": "name",
+            "баркод": "barcode",
+            "barcode": "barcode",
+            "ean": "barcode",
+            "цена на стек": "case_price",
+            "цена на стек (лв)": "case_price",
+            "case_price": "case_price",
+            "препоръчителна цена": "rrp_price",
+            "препоръчителна цена за 1бр (лв)": "rrp_price",
+            "rrp_price": "rrp_price",
+            "брой в стек": "units_per_case",
+            "units_per_case": "units_per_case",
+            "категория": "category",
+            "category": "category",
+            "линк към снимка": "image_url",
+            "снимка": "image_url",
+            "image_url": "image_url",
+            "supplier_name": "supplier_name",
+            "supplier_minimum": "supplier_minimum"
+        }
+
+        renamed_cols = {}
+        for col in df.columns:
+            clean_col = str(col).strip().lower()
+            if clean_col in col_map:
+                renamed_cols[col] = col_map[clean_col]
+
+        df = df.rename(columns=renamed_cols)
+
+        if "name" not in df.columns or "case_price" not in df.columns:
+            raise HTTPException(status_code=400, detail="Файлът трябва да съдържа поне колони за Име и Цена на стек")
+
+        default_supplier = current_user.company_name if current_user else "Официален Производител"
+        imported_count = 0
+
+        for _, row in df.iterrows():
+            if pd.isna(row.get("name")) or not str(row.get("name")).strip():
+                continue
+
+            barcode = str(row.get("barcode", "")).strip()
+            if not barcode or barcode == "nan":
+                barcode = str(uuid.uuid4())[:12]
+
+            case_price = float(str(row.get("case_price", 20.0)).replace(",", "."))
+            rrp_price = float(str(row.get("rrp_price", case_price * 1.35)).replace(",", "."))
+            units_per_case = int(row.get("units_per_case", 24)) if not pd.isna(row.get("units_per_case")) else 24
+            category = str(row.get("category", "Безалкохолни & Води")).strip()
+            image_url = str(row.get("image_url", "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80")).strip()
+            supplier_name = str(row.get("supplier_name", default_supplier)).strip()
+            supplier_min = float(row.get("supplier_minimum", 50.0)) if not pd.isna(row.get("supplier_minimum")) else 50.0
+
+            # Upsert по баркод
+            existing = db.query(models.Product).filter(models.Product.barcode == barcode).first()
+            if existing:
+                existing.name = str(row["name"]).strip()
+                existing.casePrice = case_price
+                existing.rrpPrice = rrp_price
+                existing.unitsPerCase = units_per_case
+                existing.category = category
+                existing.imageUrl = image_url
+            else:
+                new_prod = models.Product(
+                    id=str(uuid.uuid4())[:8],
+                    name=str(row["name"]).strip(),
+                    category=category,
+                    barcode=barcode,
+                    supplierName=supplier_name,
+                    supplierMinimum=supplier_min,
+                    unitsPerCase=units_per_case,
+                    casePrice=case_price,
+                    rrpPrice=rrp_price,
+                    imageUrl=image_url,
+                    hasTieredDiscount=True,
+                    tier1Qty=5,
+                    tier1Discount=5.0,
+                    tier2Qty=10,
+                    tier2Discount=10.0,
+                    supplier_id=current_user.id if current_user else None
+                )
+                db.add(new_prod)
+            imported_count += 1
+
+        db.commit()
+        return {"status": "success", "message": f"Успешно обработени и качени {imported_count} артикула!", "count": imported_count}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Грешка при импорта: {str(e)}")
+
 @app.get("/api/orders")
 def get_orders(email: Optional[str] = None, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
     query = db.query(models.Order)
@@ -467,9 +626,7 @@ def update_order_status(order_id: str, payload: UpdateOrderStatusRequest, backgr
     db.commit()
     db.refresh(order)
 
-    # Фоново изпращане на имейл нотификация към магазина при смяна на статуса
     background_tasks.add_task(trigger_status_email, order, payload.status)
-
     return {"status": "success", "order_id": order.id, "new_status": order.status}
 
 @app.get("/api/orders/{order_id}/invoice")

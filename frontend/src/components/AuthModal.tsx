@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Eye, EyeOff, X, Store, Building2 } from "lucide-react";
+import { Eye, EyeOff, X, Store, Building2, Check, AlertCircle } from "lucide-react";
 import { useAuth, User } from "@/context/AuthContext";
 
 declare global {
@@ -19,13 +19,14 @@ export default function AuthModal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Полета на формата
+  // Form states
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [eik, setEik] = useState("");
   const [mol, setMol] = useState("");
   const [address, setAddress] = useState("");
+  const [eikStatus, setEikStatus] = useState<{ valid: boolean; message: string } | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -43,13 +44,6 @@ export default function AuthModal() {
     }
   }, [isAuthOpen]);
 
-  if (!isAuthOpen) return null;
-
-  const handleClose = () => {
-    setIsAuthOpen(false);
-    setError(null);
-  };
-
   const getApiBaseUrl = () => {
     if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
     if (typeof window !== 'undefined') {
@@ -59,6 +53,33 @@ export default function AuthModal() {
       }
     }
     return "https://fairlike.onrender.com";
+  };
+
+  // Валидация на ЕИК в реално време
+  const handleEikChange = async (val: string) => {
+    setEik(val);
+    const cleaned = val.replace(/\D/g, "");
+    if (cleaned.length === 9 || cleaned.length === 13) {
+      try {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/api/auth/validate-eik/${cleaned}`);
+        if (res.ok) {
+          const data = await res.json();
+          setEikStatus({ valid: data.valid, message: data.message });
+        }
+      } catch (err) {
+        setEikStatus(null);
+      }
+    } else {
+      setEikStatus(null);
+    }
+  };
+
+  if (!isAuthOpen) return null;
+
+  const handleClose = () => {
+    setIsAuthOpen(false);
+    setError(null);
   };
 
   const syncGoogleUserToBackend = async (googleUser: { email: string; name: string }) => {
@@ -230,7 +251,6 @@ export default function AuthModal() {
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-xs flex flex-col items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-xl border border-[#EBE8E3] text-[#121212] relative">
         
-        {/* Затваряне */}
         <button
           onClick={handleClose}
           className="absolute top-5 right-5 text-neutral-400 hover:text-[#121212] p-1 cursor-pointer transition-colors"
@@ -238,7 +258,6 @@ export default function AuthModal() {
           <X className="w-4 h-4" />
         </button>
 
-        {/* Заглавна бранд част (Faire-стил) */}
         <div className="flex flex-col items-center text-center mb-6">
           <span className="text-2xl font-serif font-black tracking-[0.2em] text-[#121212] uppercase">
             OPTOM
@@ -248,7 +267,6 @@ export default function AuthModal() {
           </p>
         </div>
 
-        {/* Избор на тип профил */}
         <div className="mb-6">
           <div className="grid grid-cols-2 gap-1.5 bg-[#FAF9F7] p-1 rounded-lg border border-[#EBE8E3]">
             <button
@@ -276,7 +294,6 @@ export default function AuthModal() {
           </div>
         </div>
 
-        {/* Описание */}
         <div className="text-left mb-5">
           <h2 className="text-lg font-serif font-normal text-[#121212]">
             {mode === "login" 
@@ -290,7 +307,6 @@ export default function AuthModal() {
           </p>
         </div>
 
-        {/* Google Single Sign-On */}
         <button
           type="button"
           onClick={handleGoogleAuth}
@@ -319,7 +335,6 @@ export default function AuthModal() {
           </div>
         )}
 
-        {/* Форма */}
         <form onSubmit={handleSubmit} className="space-y-3.5 text-left" autoComplete="on">
           
           {mode === "register" && (
@@ -340,12 +355,20 @@ export default function AuthModal() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#121212] mb-1">ЕИК / БУЛСТАТ *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-semibold text-[#121212]">ЕИК / БУЛСТАТ *</label>
+                    {eikStatus && (
+                      <span className={`text-[9px] font-mono flex items-center gap-0.5 ${eikStatus.valid ? "text-emerald-700" : "text-amber-700"}`}>
+                        {eikStatus.valid ? <Check className="w-2.5 h-2.5" /> : <AlertCircle className="w-2.5 h-2.5" />}
+                        {eikStatus.valid ? "Валиден" : "Проверете"}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     required
                     value={eik}
-                    onChange={(e) => setEik(e.target.value)}
+                    onChange={(e) => handleEikChange(e.target.value)}
                     placeholder="206894123"
                     className="w-full text-xs px-3 py-2 bg-[#FAF9F7] border border-[#EBE8E3] rounded-md font-mono focus:outline-none focus:border-[#121212] focus:bg-white"
                   />
