@@ -10,7 +10,6 @@ import {
   Plus, 
   Minus, 
   ArrowRight, 
-  Zap, 
   Package, 
   Store, 
   Check, 
@@ -20,21 +19,24 @@ import {
   SlidersHorizontal,
   Award,
   Sparkles,
-  X,
-  PackagePlus,
-  ArrowUpRight
+  ArrowUpRight,
+  Clock,
+  TrendingUp,
+  Percent,
+  Layers,
+  FileText
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
 import LiveSearch from "@/components/LiveSearch";
-import { useCart, CartProduct } from "@/context/CartContext";
+import { useCart, CartProduct, getTieredPrice } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 
 const CATEGORY_TILES = [
-  { id: "Напитки", name: "Безалкохолни & Енергийни", count: "32+ бранда", img: "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80" },
-  { id: "Снаксове", name: "Чипс, Ядки & Солети", count: "24+ бранда", img: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80" },
-  { id: "Шоколади", name: "Шоколади & Вафли", count: "40+ бранда", img: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80" },
-  { id: "Кафе & Чай", name: "Кафе & Топли напитки", count: "18+ бранда", img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500&q=80" },
+  { id: "Напитки", name: "Безалкохолни & Енергийни", subtitle: "Стекове и кенове", img: "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80" },
+  { id: "Снаксове", name: "Чипс, Ядки & Солети", subtitle: "Бързооборотни", img: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80" },
+  { id: "Шоколади", name: "Шоколади & Вафли", subtitle: "Импулсни стоки", img: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80" },
+  { id: "Кафе & Чай", name: "Кафе & Топли напитки", subtitle: "HoReCa & Retail", img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500&q=80" },
 ];
 
 const FEATURED_BRANDS = [
@@ -43,7 +45,7 @@ const FEATURED_BRANDS = [
     tagline: "Milka, Oreo, Barni, Tuc", 
     category: "Шоколади & Сладки", 
     moq: 50, 
-    badge: "Топ Марж +35%", 
+    badge: "+35% Марж", 
     img: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=600&q=80" 
   },
   { 
@@ -51,7 +53,7 @@ const FEATURED_BRANDS = [
     tagline: "Red Bull Energy & Sugarfree", 
     category: "Енергийни напитки", 
     moq: 80, 
-    badge: "Бързооборотни", 
+    badge: "Високо търсене", 
     img: "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=600&q=80" 
   },
   { 
@@ -59,7 +61,7 @@ const FEATURED_BRANDS = [
     tagline: "Chio, Pom-Bär, Nutline", 
     category: "Снаксове & Ядки", 
     moq: 50, 
-    badge: "Високо търсене", 
+    badge: "Директен внос", 
     img: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=600&q=80" 
   },
   { 
@@ -91,46 +93,28 @@ export default function HomePage() {
   const [filterType, setFilterType] = useState<"all" | "local" | "low_min" | "top_brand">("all");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
-  
   const [showStickyFilters, setShowStickyFilters] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 420) {
-        setShowStickyFilters(true);
-      } else {
-        setShowStickyFilters(false);
-      }
+      setShowStickyFilters(window.scrollY > 380);
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const [timeLeft, setTimeLeft] = useState({ hours: 14, minutes: 32, seconds: 45 });
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev.seconds > 0) return { ...prev, seconds: prev.seconds - 1 };
-        if (prev.minutes > 0) return { ...prev, minutes: 59, seconds: 59 };
-        if (prev.hours > 0) return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        return { hours: 24, minutes: 0, seconds: 0 };
-      });
-    }, 1000);
-    return () => clearInterval(timer);
   }, []);
 
   const [toastIndex, setToastIndex] = useState(0);
   const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
-    const initialDelay = setTimeout(() => setShowToast(true), 4000);
+    const initialDelay = setTimeout(() => setShowToast(true), 3500);
     const interval = setInterval(() => {
       setShowToast(false);
       setTimeout(() => {
         setToastIndex((prev) => (prev + 1) % RECENT_PURCHASES.length);
         setShowToast(true);
-      }, 1500);
-    }, 14000);
+      }, 1200);
+    }, 12000);
 
     return () => {
       clearTimeout(initialDelay);
@@ -218,38 +202,44 @@ export default function HomePage() {
     if (!user) {
       setIsAuthOpen(true);
     } else if (isSupplier) {
-      alert("Количката за зареждане е активна само за профили на търговски обекти/магазини.");
+      alert("Количката е достъпна само за търговски обекти.");
     } else {
       setIsCartOpen(true);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 antialiased selection:bg-slate-900 selection:text-white">
+    <div className="min-h-screen bg-[#FAFAFA] text-neutral-900 antialiased selection:bg-neutral-900 selection:text-white">
       
-      {/* 1. TOP ANNOUNCEMENT BAR */}
-      <div className="bg-slate-950 text-white text-[11px] font-semibold py-2.5 px-4 text-center tracking-wide flex items-center justify-center gap-2 border-b border-slate-800">
-        <span className="bg-white text-slate-950 px-2 py-0.5 rounded font-extrabold text-[10px] uppercase tracking-wider">B2B Платформа</span>
-        <span>Директни заводски цени на стекове &bull; Безплатна палетна доставка над 300 лв. &bull; Net 60 условия</span>
+      {/* 1. MINIMAL TOP TICKER */}
+      <div className="bg-neutral-950 text-neutral-300 text-[11px] font-medium py-2 px-4 border-b border-neutral-800 tracking-tight">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Директна B2B дистрибуция за магазини и заведения</span>
+          </div>
+          <div className="hidden sm:flex items-center gap-4 text-neutral-400 text-[10px] tracking-wider uppercase">
+            <span>Net 60 дни отсрочка</span>
+            <span>&bull;</span>
+            <span>Безплатна логистика над 300 лв.</span>
+          </div>
+        </div>
       </div>
 
       {/* 2. НАВИГАЦИЯ */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-6">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-18 flex items-center justify-between gap-6">
           
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-10 h-10 rounded-xl bg-slate-950 flex items-center justify-center text-white font-black text-xl shadow-md group-hover:bg-slate-800 transition-all">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-neutral-950 flex items-center justify-center text-white font-black text-sm tracking-tighter">
               O
             </div>
-            <div>
-              <span className="text-2xl font-black tracking-tight text-slate-950">
-                OPTOM<span className="text-emerald-600">.BG</span>
-              </span>
-              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest -mt-1">B2B FMCG Маркетплейс</p>
-            </div>
+            <span className="text-xl font-black tracking-tight text-neutral-950">
+              OPTOM<span className="text-neutral-400">.BG</span>
+            </span>
           </Link>
 
-          <div className="hidden md:flex flex-1 max-w-lg mx-4">
+          <div className="hidden md:flex flex-1 max-w-md mx-4">
             <LiveSearch />
           </div>
 
@@ -259,12 +249,12 @@ export default function HomePage() {
             {!isSupplier && (
               <button
                 onClick={handleCartClick}
-                className="relative flex items-center gap-2 px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer hover:scale-105"
+                className="relative flex items-center gap-2 px-3.5 py-2 bg-neutral-950 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
               >
-                {user ? <ShoppingBag className="w-4 h-4" /> : <Lock className="w-4 h-4 text-emerald-400" />}
-                <span className="hidden sm:inline">Количка</span>
+                {user ? <ShoppingBag className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-neutral-400" />}
+                <span className="hidden sm:inline">Заявка</span>
                 {user && totalCartCases > 0 && (
-                  <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 text-[11px] font-black flex items-center justify-center shadow">
+                  <span className="w-4.5 h-4.5 rounded-full bg-white text-neutral-950 text-[10px] font-black flex items-center justify-center">
                     {totalCartCases}
                   </span>
                 )}
@@ -276,207 +266,213 @@ export default function HomePage() {
 
       {/* 3. STICKY FILTER BAR */}
       {showStickyFilters && (
-        <div className="sticky top-20 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-sm animate-in slide-in-from-top duration-300 py-3">
+        <div className="sticky top-18 z-30 bg-white/95 backdrop-blur-md border-b border-neutral-200/90 shadow-xs animate-in slide-in-from-top-1 duration-200 py-2.5">
           <div className="max-w-7xl mx-auto px-4 sm:px-8 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setFilterType("all")}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer border ${
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 border cursor-pointer ${
                   filterType === "all"
-                    ? "bg-slate-950 text-white border-slate-950 shadow-xs"
-                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    ? "bg-neutral-950 text-white border-neutral-950"
+                    : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
                 }`}
               >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                <span>Всички артикули</span>
+                Всички оферти
               </button>
 
               <button
                 onClick={() => setFilterType("local")}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer border ${
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 border cursor-pointer ${
                   filterType === "local"
-                    ? "bg-slate-950 text-white border-slate-950 shadow-xs"
-                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    ? "bg-neutral-950 text-white border-neutral-950"
+                    : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
                 }`}
               >
-                <span>🇧🇬 Български производители</span>
+                Български производители
               </button>
 
               <button
                 onClick={() => setFilterType("low_min")}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer border ${
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 border cursor-pointer ${
                   filterType === "low_min"
-                    ? "bg-slate-950 text-white border-slate-950 shadow-xs"
-                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    ? "bg-neutral-950 text-white border-neutral-950"
+                    : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
                 }`}
               >
-                <span>Нисък минимум (MOQ ≤ 50 лв.)</span>
+                Нисък минимум (MOQ ≤ 50 лв.)
               </button>
 
               <button
                 onClick={() => setFilterType("top_brand")}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer border ${
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 border cursor-pointer ${
                   filterType === "top_brand"
-                    ? "bg-slate-950 text-white border-slate-950 shadow-xs"
-                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    ? "bg-neutral-950 text-white border-neutral-950"
+                    : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
                 }`}
               >
-                <Award className="w-3.5 h-3.5 text-amber-500" />
-                <span>Топ Брандове</span>
+                Топ Марки
               </button>
             </div>
 
-            <span className="text-[11px] font-bold text-slate-400 shrink-0 hidden md:inline">
-              {filteredProducts.length} оферти
+            <span className="text-[11px] text-neutral-400 font-mono hidden md:inline">
+              {filteredProducts.length} артикула
             </span>
           </div>
         </div>
       )}
 
-      {/* 4. HERO СЕКЦИЯ */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-8 sm:py-12">
-        <div className="relative rounded-3xl bg-white border border-slate-200/80 overflow-hidden min-h-[440px] flex flex-col md:flex-row items-center justify-between p-8 sm:p-14 shadow-sm">
-          
-          <div className="max-w-xl z-10 space-y-5 text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold tracking-wide">
-              <Zap className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" /> Официален B2B Портал за презареждане
+      {/* 4. HERO SECTION - ELEGANT & MONOCHROME */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-10 pb-6">
+        <div className="rounded-3xl bg-neutral-950 text-white p-8 sm:p-14 relative overflow-hidden border border-neutral-900 shadow-sm">
+          <div className="max-w-2xl relative z-10 space-y-6 text-left">
+            
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-300 font-medium tracking-tight">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400"></span>
+              Faire-модел за търговия на едро в България
             </div>
-            
-            <h1 className="text-3xl sm:text-5xl font-black text-slate-950 tracking-tight leading-[1.15]">
-              Зареждай обекта с <span className="bg-gradient-to-r from-slate-950 via-slate-800 to-slate-700 bg-clip-text text-transparent underline decoration-emerald-500 decoration-4">заводски цени</span> на едро
+
+            <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-[1.15] text-white">
+              Директни заводски цени на стекове за независими обекти.
             </h1>
-            
-            <p className="text-sm sm:text-base text-slate-600 font-normal leading-relaxed">
-              Директна дистрибуция на стекове с напитки, пакетирани храни, снаксове и кафе. Без прекупвачи, с автоматични ДДС фактури и отложено плащане Net 60 дни.
+
+            <p className="text-sm sm:text-base text-neutral-400 font-normal leading-relaxed max-w-xl">
+              Платформа за презареждане на супермаркети, денонощни магазини и заведения. Без търговски прекупвачи, с гарантиран марж до 35% и автоматично генериране на ЗДДС фактури.
             </p>
-            
+
             <div className="pt-2 flex flex-wrap items-center gap-3">
               <button 
                 onClick={() => {
-                  const el = document.getElementById("brands-section");
-                  el?.scrollIntoView({ behavior: "smooth" });
+                  document.getElementById("catalog-section")?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className="px-6 py-3.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider shadow-lg shadow-slate-950/20 flex items-center gap-2 transition-all cursor-pointer hover:gap-3"
+                className="px-6 py-3 bg-white hover:bg-neutral-100 text-neutral-950 rounded-xl text-xs font-bold tracking-tight shadow-sm flex items-center gap-2 transition-all cursor-pointer"
               >
-                Разгледай брандовете <ArrowRight className="w-4 h-4" />
+                Към каталога на едро <ArrowRight className="w-3.5 h-3.5" />
               </button>
-              
-              {isSupplier ? (
-                <Link
-                  href="/supplier"
-                  className="px-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md"
-                >
-                  <PackagePlus className="w-4 h-4" />
-                  Към Доставчик Панела &rarr;
-                </Link>
-              ) : !user ? (
+
+              {!user && (
                 <button
                   onClick={() => setIsAuthOpen(true)}
-                  className="px-5 py-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  className="px-5 py-3 bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-800 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  <Eye className="w-4 h-4 text-emerald-700" />
-                  Показване на цените &rarr;
+                  <Eye className="w-3.5 h-3.5 text-neutral-400" />
+                  Отключи B2B цени
                 </button>
-              ) : (
-                <Link
-                  href="/supplier"
-                  className="px-5 py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
-                >
-                  <Building2 className="w-4 h-4 text-slate-600" />
-                  Вход за Производители &rarr;
-                </Link>
               )}
             </div>
-          </div>
 
-          <div className="relative mt-8 md:mt-0 max-w-md w-full flex justify-center">
-            <div className="relative w-full aspect-4/3 rounded-2xl overflow-hidden shadow-2xl border-4 border-slate-100 group">
-              <img 
-                src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&q=80" 
-                alt="FMCG Warehouse" 
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-5">
-                <div className="text-white">
-                  <p className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">Логистика & Дистрибуция</p>
-                  <p className="text-xs font-bold">Стекове и палети на едро с 24-48ч доставка</p>
-                </div>
+            {/* Micro Conversion Badges */}
+            <div className="pt-4 border-t border-neutral-900 grid grid-cols-3 gap-4 text-left">
+              <div>
+                <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Условия</p>
+                <p className="text-xs font-bold text-neutral-200 mt-0.5">Net 60 Отсрочка</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Логистика</p>
+                <p className="text-xs font-bold text-neutral-200 mt-0.5">24–48ч Доставка</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Поръчка</p>
+                <p className="text-xs font-bold text-neutral-200 mt-0.5">От 50 лв. MOQ</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 5. FAIRE-STYLE БРАНДОВЕ & ПРОИЗВОДИТЕЛИ (STOREFRONTS) */}
-      <section id="brands-section" className="max-w-7xl mx-auto px-4 sm:px-8 py-8 border-t border-slate-200">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-900 text-white font-extrabold text-[10px] uppercase tracking-wider">
-                Faire Модел
-              </span>
-              <span className="text-xs font-bold text-emerald-700">Директно от производител</span>
+      {/* 5. ИСТОРИЯТА И ИДЕЯТА ЗАД OPTOM.BG (BRAND STORY) */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white border border-neutral-200 rounded-3xl p-6 sm:p-10 shadow-xs">
+          
+          <div className="md:col-span-1 space-y-3">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 font-bold">Нашата Мисия</span>
+            <h2 className="text-xl font-black text-neutral-950 tracking-tight">
+              Защо създадохме OPTOM.BG?
+            </h2>
+            <p className="text-xs text-neutral-500 leading-relaxed">
+              Дигитализираме традиционната верига на доставки, като свързваме официалните производители и вносители директно с рафта на вашия магазин.
+            </p>
+          </div>
+
+          <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="space-y-2 p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
+              <div className="w-8 h-8 rounded-lg bg-neutral-950 text-white flex items-center justify-center font-black text-xs">
+                01
+              </div>
+              <h3 className="text-xs font-bold text-neutral-950">Директен достъп без прекупвачи</h3>
+              <p className="text-[11px] text-neutral-500 leading-relaxed">
+                Край на завишените надценки от междинни складове. Малките магазини получават същите заводски оферти, както големите вериги.
+              </p>
             </div>
-            <h2 className="text-2xl font-black text-slate-950 tracking-tight mt-1">
-              Официални Марки & Дистрибутори
+
+            <div className="space-y-2 p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
+              <div className="w-8 h-8 rounded-lg bg-neutral-950 text-white flex items-center justify-center font-black text-xs">
+                02
+              </div>
+              <h3 className="text-xs font-bold text-neutral-950">Гъвкавост и ликвидни стимули</h3>
+              <p className="text-[11px] text-neutral-500 leading-relaxed">
+                Прагове за минимална поръчка от само 50 лв. и опции за отложено плащане, за да не блокирате излишен оборотен капитал.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. FAIRE STOREFRONTS (БРАНДОВЕ) */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
+        <div className="flex items-end justify-between mb-6">
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 font-bold">Официални партньори</span>
+            <h2 className="text-xl font-black text-neutral-950 tracking-tight mt-0.5">
+              Директни Фабрики & Марки
             </h2>
           </div>
-          <span className="text-xs text-slate-500 font-medium">Кликнете върху бранд за пълния ценоразпис</span>
+          <span className="text-xs text-neutral-400 hidden sm:inline">Изберете производител за каталог</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {FEATURED_BRANDS.map((brand) => (
             <Link
               key={brand.name}
               href={`/brand/${encodeURIComponent(brand.name)}`}
-              className="group bg-white rounded-2xl border border-slate-200 hover:border-slate-950 p-5 transition-all duration-200 shadow-xs hover:shadow-xl flex flex-col justify-between"
+              className="group bg-white rounded-2xl border border-neutral-200 hover:border-neutral-900 p-4 transition-all duration-200 shadow-xs flex flex-col justify-between"
             >
               <div>
-                <div className="relative aspect-16/9 rounded-xl overflow-hidden bg-slate-100 mb-4 border border-slate-100">
+                <div className="relative aspect-16/10 rounded-xl overflow-hidden bg-neutral-100 mb-3 border border-neutral-100">
                   <img
                     src={brand.img}
                     alt={brand.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
-                  <span className="absolute top-2.5 right-2.5 bg-slate-950/90 text-white font-black text-[9px] px-2 py-0.5 rounded-md shadow-sm">
+                  <span className="absolute top-2 right-2 bg-neutral-950 text-white font-mono text-[9px] font-bold px-2 py-0.5 rounded-md">
                     {brand.badge}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    {brand.category}
-                  </span>
-                  <span className="text-[10px] font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
-                    MOQ: {brand.moq} лв.
-                  </span>
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-neutral-400 font-medium">{brand.category}</span>
+                  <span className="font-mono text-neutral-600">MOQ: {brand.moq} лв.</span>
                 </div>
 
-                <h3 className="text-sm font-black text-slate-950 mt-1.5 group-hover:text-emerald-700 transition-colors">
+                <h3 className="text-xs font-bold text-neutral-950 mt-1 group-hover:text-neutral-900">
                   {brand.name}
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                <p className="text-[11px] text-neutral-500 mt-0.5 truncate">
                   {brand.tagline}
                 </p>
               </div>
 
-              <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-900 group-hover:text-emerald-700">
-                <span>Към каталога на бранда</span>
-                <ArrowUpRight className="w-4 h-4 transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              <div className="pt-3 mt-3 border-t border-neutral-100 flex items-center justify-between text-xs font-semibold text-neutral-900">
+                <span>Каталог на бранда</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-neutral-400 group-hover:text-neutral-950 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* 6. КАТЕГОРИИ ЗА ЗАРЕЖДАНЕ */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
-        <div className="text-center max-w-lg mx-auto mb-8 space-y-1">
-          <h2 className="text-2xl font-black text-slate-950 tracking-tight">Категории за зареждане</h2>
-          <p className="text-xs text-slate-500">Изберете категория за филтриране на стековете</p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+      {/* 7. КАТЕГОРИИ */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           {CATEGORY_TILES.map((cat) => {
             const isSelected = selectedCategory === cat.id;
             return (
@@ -486,115 +482,74 @@ export default function HomePage() {
                   setSelectedCategory(isSelected ? "all" : cat.id);
                   document.getElementById("catalog-section")?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className={`group cursor-pointer rounded-2xl overflow-hidden bg-white border transition-all duration-200 p-3 flex flex-col items-center text-center ${
+                className={`cursor-pointer rounded-2xl bg-white border transition-all p-3.5 flex items-center gap-3 ${
                   isSelected 
-                    ? "border-slate-950 shadow-md ring-2 ring-slate-950/20" 
-                    : "border-slate-200 hover:border-slate-400 shadow-xs hover:shadow-md"
+                    ? "border-neutral-950 ring-1 ring-neutral-950 shadow-xs" 
+                    : "border-neutral-200 hover:border-neutral-300 shadow-xs"
                 }`}
               >
-                <div className="w-full aspect-4/3 rounded-xl overflow-hidden bg-slate-100 mb-3">
-                  <img 
-                    src={cat.img} 
-                    alt={cat.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                  />
+                <div className="w-11 h-11 rounded-xl overflow-hidden bg-neutral-100 shrink-0">
+                  <img src={cat.img} alt={cat.name} className="w-full h-full object-cover" />
                 </div>
-                <h3 className="text-sm font-bold text-slate-900 group-hover:text-slate-950 transition-colors">{cat.name}</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">{cat.count}</p>
+                <div className="min-w-0">
+                  <h3 className="text-xs font-bold text-neutral-950 truncate">{cat.name}</h3>
+                  <p className="text-[10px] text-neutral-400 truncate">{cat.subtitle}</p>
+                </div>
               </div>
             );
           })}
         </div>
       </section>
 
-      {/* 7. FLASH DEAL BANNER */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
-        <div className="rounded-3xl bg-slate-950 text-white p-8 sm:p-12 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 shadow-xl border border-slate-800">
-          <div className="space-y-4 max-w-lg">
-            <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-extrabold text-[10px] tracking-wider uppercase border border-emerald-500/30">
-              Седмична B2B Кампания
-            </span>
-            <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
-              Ексклузивен марж до 35% за стекове безалкохолни & енергийни напитки
-            </h2>
-            <p className="text-xs text-slate-400">
-              Специални фабрични квоти за магазини и заведения. Офертата важи до изчерпване на количествата.
-            </p>
-
-            <div className="flex items-center gap-3 pt-2">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-center min-w-[60px]">
-                <span className="text-xl font-black font-mono text-emerald-400">{String(timeLeft.hours).padStart(2, '0')}</span>
-                <p className="text-[9px] uppercase text-slate-400 font-bold">Часа</p>
-              </div>
-              <span className="text-xl font-bold text-slate-600">:</span>
-              <div className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-center min-w-[60px]">
-                <span className="text-xl font-black font-mono text-emerald-400">{String(timeLeft.minutes).padStart(2, '0')}</span>
-                <p className="text-[9px] uppercase text-slate-400 font-bold">Мин</p>
-              </div>
-              <span className="text-xl font-bold text-slate-600">:</span>
-              <div className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-center min-w-[60px]">
-                <span className="text-xl font-black font-mono text-emerald-400">{String(timeLeft.seconds).padStart(2, '0')}</span>
-                <p className="text-[9px] uppercase text-slate-400 font-bold">Сек</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative">
-            <img 
-              src="https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=600&q=80" 
-              alt="Promo Pack FMCG" 
-              className="w-72 h-72 object-cover rounded-2xl border-4 border-slate-800 shadow-2xl"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* 8. КАТАЛОГ С ПРОДУКТИ */}
-      <section id="catalog-section" className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 border-b border-slate-200 pb-4">
+      {/* 8. КАТАЛОГ СТЕКОВЕ */}
+      <section id="catalog-section" className="max-w-7xl mx-auto px-4 sm:px-8 py-10">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 border-b border-neutral-200 pb-4">
           <div>
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Каталог на едро</span>
-            <h2 className="text-2xl font-black text-slate-950 tracking-tight mt-0.5">
-              {selectedCategory === "all" ? "Всички налични артикули" : selectedCategory}
+            <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 font-bold">Налични оферти на едро</span>
+            <h2 className="text-xl font-black text-neutral-950 tracking-tight mt-0.5">
+              {selectedCategory === "all" ? "Всички артикули по стекове" : selectedCategory}
             </h2>
           </div>
+
           {selectedCategory !== "all" && (
             <button
               onClick={() => setSelectedCategory("all")}
-              className="text-xs font-bold text-slate-950 hover:underline cursor-pointer"
+              className="text-xs font-bold text-neutral-950 hover:underline cursor-pointer"
             >
-              Покажи всички артикули &rarr;
+              Покажи целия каталог &rarr;
             </button>
           )}
         </div>
 
         {loading ? (
           <div className="py-20 text-center">
-            <div className="inline-block w-8 h-8 border-3 border-slate-950 border-t-transparent rounded-full animate-spin mb-3"></div>
-            <p className="text-xs text-slate-500 font-semibold">Зареждане на каталога с цени...</p>
+            <div className="inline-block w-6 h-6 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p className="text-xs text-neutral-500 font-medium">Зареждане на каталога...</p>
           </div>
         ) : filteredProducts.length === 0 ? (
-          <div className="py-20 text-center bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
-            <Package className="w-12 h-12 stroke-1 mx-auto text-slate-400 mb-3" />
-            <h3 className="text-sm font-bold text-slate-900">Няма намерени артикули</h3>
-            <p className="text-xs text-slate-500 mt-1">Опитайте с друго търсене или изчистете избраната категория.</p>
+          <div className="py-16 text-center bg-white rounded-3xl border border-neutral-200 p-8 shadow-xs">
+            <Package className="w-10 h-10 stroke-1 mx-auto text-neutral-400 mb-2" />
+            <h3 className="text-xs font-bold text-neutral-900">Няма намерени артикули</h3>
+            <p className="text-[11px] text-neutral-500 mt-0.5">Опитайте с друга ключова дума или изчистете категорията.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {filteredProducts.map((p) => {
               const qty = quantities[p.id] || 1;
+              const { effectivePrice, discountPercent } = getTieredPrice(p, qty);
               const retailTotalPerCase = p.rrpPrice * p.unitsPerCase;
-              const profitPerCase = Math.max(0, retailTotalPerCase - p.casePrice);
+              const profitPerCase = Math.max(0, retailTotalPerCase - effectivePrice);
               const marginPercent = retailTotalPerCase > 0 ? Math.round((profitPerCase / retailTotalPerCase) * 100) : 0;
-              const unitWholesale = p.casePrice / (p.unitsPerCase || 1);
+              const unitWholesale = effectivePrice / (p.unitsPerCase || 1);
 
               return (
                 <div 
                   key={p.id}
-                  className="group bg-white rounded-2xl border border-slate-200 hover:border-slate-950 transition-all duration-200 shadow-xs hover:shadow-xl flex flex-col justify-between overflow-hidden"
+                  className="group bg-white rounded-2xl border border-neutral-200 hover:border-neutral-900 transition-all duration-200 shadow-xs flex flex-col justify-between overflow-hidden"
                 >
                   <div>
-                    <div className="relative aspect-square bg-[#FAFAFA] p-4 flex items-center justify-center overflow-hidden border-b border-slate-100">
+                    {/* Снимка */}
+                    <div className="relative aspect-square bg-[#FAFAFA] p-4 flex items-center justify-center overflow-hidden border-b border-neutral-100">
                       <img 
                         src={p.imageUrl} 
                         alt={p.name}
@@ -603,84 +558,76 @@ export default function HomePage() {
                       />
                       
                       {user ? (
-                        <span className="absolute top-3 right-3 bg-emerald-600 text-white font-black text-[10px] px-2 py-0.5 rounded-md shadow-sm">
+                        <span className="absolute top-2.5 right-2.5 bg-neutral-950 text-white font-mono font-bold text-[9px] px-2 py-0.5 rounded-md shadow-xs">
                           +{marginPercent}% Марж
                         </span>
                       ) : (
-                        <span className="absolute top-3 right-3 bg-slate-900 text-white font-bold text-[9px] px-2 py-0.5 rounded-md shadow-sm flex items-center gap-1">
-                          <Lock className="w-2.5 h-2.5 text-emerald-400" /> B2B Марж
+                        <span className="absolute top-2.5 right-2.5 bg-neutral-900 text-white font-medium text-[9px] px-2 py-0.5 rounded-md flex items-center gap-1 shadow-xs">
+                          <Lock className="w-2.5 h-2.5 text-neutral-400" /> B2B Марж
                         </span>
                       )}
 
                       <Link
                         href={`/brand/${encodeURIComponent(p.supplierName)}`}
-                        className="absolute bottom-3 left-3 bg-white/95 hover:bg-slate-900 hover:text-white text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200 transition-colors shadow-xs"
+                        className="absolute bottom-2.5 left-2.5 bg-white text-neutral-800 text-[9px] font-semibold px-2 py-0.5 rounded border border-neutral-200 hover:bg-neutral-950 hover:text-white transition-colors"
                       >
                         {p.supplierName} &rarr;
                       </Link>
                     </div>
 
+                    {/* Детайли */}
                     <div className="p-4 space-y-3">
                       <div>
-                        <h3 className="text-xs font-bold text-slate-950 line-clamp-2 h-8 leading-snug">
+                        <h3 className="text-xs font-bold text-neutral-950 line-clamp-2 h-8 leading-snug">
                           {p.name}
                         </h3>
-                        {!user && (
-                          <p className="text-[11px] text-slate-500 mt-1 font-medium">
-                            Опаковка: Стек от {p.unitsPerCase} бр.
-                          </p>
-                        )}
+                        <p className="text-[10px] text-neutral-400 mt-1 font-mono">
+                          Опаковка: {p.unitsPerCase} бр./стек
+                        </p>
                       </div>
 
                       {user && (
-                        <>
-                          <div className="bg-slate-50 rounded-xl p-2.5 space-y-1 text-xs border border-slate-100">
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-500 text-[11px]">Стек ({p.unitsPerCase} бр.):</span>
-                              <span className="font-black text-slate-950 font-mono text-sm">{p.casePrice.toFixed(2)} лв.</span>
-                            </div>
-                            <div className="flex justify-between items-center text-[11px]">
-                              <span className="text-slate-400">Едрова за 1 бр.:</span>
-                              <span className="font-semibold text-slate-600 font-mono">{unitWholesale.toFixed(2)} лв.</span>
-                            </div>
-                            <div className="flex justify-between items-center text-[11px] pt-1 border-t border-slate-200">
-                              <span className="text-slate-400">Препор. цена:</span>
-                              <span className="font-bold text-emerald-700 font-mono">{p.rrpPrice.toFixed(2)} лв.</span>
-                            </div>
+                        <div className="bg-neutral-50 rounded-xl p-2.5 space-y-1 text-xs border border-neutral-100 font-mono">
+                          <div className="flex justify-between items-center">
+                            <span className="text-neutral-500 text-[10px]">Цена за стек:</span>
+                            <span className="font-bold text-neutral-950">{effectivePrice.toFixed(2)} лв.</span>
                           </div>
-
-                          <div className="flex items-center justify-between text-[11px] text-emerald-700 font-bold px-1">
-                            <span>Печалба от стек:</span>
-                            <span className="font-mono font-black">+{profitPerCase.toFixed(2)} лв.</span>
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-neutral-400">Едрова за 1 бр.:</span>
+                            <span className="text-neutral-600">{unitWholesale.toFixed(2)} лв.</span>
                           </div>
-                        </>
+                          <div className="flex justify-between items-center text-[10px] pt-1 border-t border-neutral-200">
+                            <span className="text-neutral-400">Препор. на рафт:</span>
+                            <span className="font-semibold text-neutral-900">{p.rrpPrice.toFixed(2)} лв.</span>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
 
+                  {/* Добавяне в кошница */}
                   <div className="p-4 pt-0">
                     {user ? (
                       isSupplier ? (
                         <Link
                           href="/supplier"
-                          className="w-full py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                          className="w-full py-2 px-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
                         >
-                          <PackagePlus className="w-3.5 h-3.5 text-emerald-600" />
                           <span>Управлявай в панела</span>
                         </Link>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200">
+                          <div className="flex items-center bg-neutral-100 rounded-xl p-0.5 border border-neutral-200">
                             <button
                               onClick={() => handleQtyChange(p.id, -1)}
-                              className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:bg-white transition-colors cursor-pointer"
+                              className="w-6 h-6 flex items-center justify-center rounded text-neutral-600 hover:bg-white transition-colors cursor-pointer"
                             >
                               <Minus className="w-3 h-3" />
                             </button>
-                            <span className="w-6 text-center text-xs font-bold font-mono text-slate-900">{qty}</span>
+                            <span className="w-5 text-center text-xs font-bold font-mono text-neutral-900">{qty}</span>
                             <button
                               onClick={() => handleQtyChange(p.id, 1)}
-                              className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:bg-white transition-colors cursor-pointer"
+                              className="w-6 h-6 flex items-center justify-center rounded text-neutral-600 hover:bg-white transition-colors cursor-pointer"
                             >
                               <Plus className="w-3 h-3" />
                             </button>
@@ -688,19 +635,19 @@ export default function HomePage() {
 
                           <button
                             onClick={() => handleAddOrAuth(p)}
-                            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                               addedAnimation === p.id
-                                ? "bg-emerald-600 text-white"
-                                : "bg-slate-950 hover:bg-slate-800 text-white shadow-sm"
+                                ? "bg-neutral-900 text-white"
+                                : "bg-neutral-950 hover:bg-neutral-800 text-white shadow-xs"
                             }`}
                           >
                             {addedAnimation === p.id ? (
                               <>
-                                <Check className="w-4 h-4 stroke-[3]" /> Добавено
+                                <Check className="w-3.5 h-3.5 stroke-[3]" /> Добавено
                               </>
                             ) : (
                               <>
-                                <ShoppingBag className="w-3.5 h-3.5" /> Добави {(qty * p.casePrice).toFixed(2)} лв.
+                                <ShoppingBag className="w-3.5 h-3.5" /> Добави {(qty * effectivePrice).toFixed(2)} лв.
                               </>
                             )}
                           </button>
@@ -709,9 +656,9 @@ export default function HomePage() {
                     ) : (
                       <button
                         onClick={() => setIsAuthOpen(true)}
-                        className="w-full py-2.5 px-3 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer hover:scale-[1.02]"
+                        className="w-full py-2 px-3 bg-neutral-950 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
                       >
-                        <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                        <Lock className="w-3.5 h-3.5 text-neutral-400" />
                         <span>Показване на цените</span>
                       </button>
                     )}
@@ -724,42 +671,42 @@ export default function HomePage() {
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-slate-950 text-white py-12 text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-6 border-b border-slate-800 pb-8 mb-8">
+      <footer className="bg-white border-t border-neutral-200 py-12 text-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-6 border-b border-neutral-100 pb-8 mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-white text-slate-950 flex items-center justify-center font-bold text-sm">
+            <div className="w-7 h-7 rounded-lg bg-neutral-950 text-white flex items-center justify-center font-bold text-xs">
               O
             </div>
             <div>
-              <span className="font-bold text-white text-sm">OPTOM.BG</span>
-              <p className="text-[10px] text-slate-400">Национален маркетплейс за търговия на едро</p>
+              <span className="font-bold text-neutral-950 text-sm">OPTOM.BG</span>
+              <p className="text-[10px] text-neutral-400">Национална B2B платформа за търговия на едро</p>
             </div>
           </div>
-          <div className="flex items-center gap-6 text-slate-400">
-            <Link href="/supplier" className="hover:text-white transition-colors">Портал за доставчици</Link>
-            {!isSupplier && <Link href="/orders" className="hover:text-white transition-colors">Моите фактури</Link>}
-            <span>Всички цени са без включен ДДС</span>
+          <div className="flex items-center gap-6 text-neutral-500 text-xs">
+            <Link href="/supplier" className="hover:text-neutral-900 transition-colors">Панел за доставчици</Link>
+            {!isSupplier && <Link href="/orders" className="hover:text-neutral-900 transition-colors">Фактури & Поръчки</Link>}
+            <span>Цените са без включен ДДС</span>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 text-center text-slate-500 text-[11px]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 text-center text-neutral-400 text-[11px] font-mono">
           &copy; 2026 OPTOM.BG. Всички права запазени.
         </div>
       </footer>
 
-      {/* LIVE SOCIAL PROOF TOAST */}
+      {/* SOCIAL PROOF TOAST */}
       {showToast && (
-        <div className="fixed bottom-6 left-6 z-50 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl max-w-xs flex items-center gap-3 animate-in slide-in-from-bottom duration-300">
-          <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-            <Store className="w-5 h-5" />
+        <div className="fixed bottom-6 left-6 z-50 bg-white border border-neutral-200 rounded-2xl p-3 shadow-xl max-w-xs flex items-center gap-3 animate-in slide-in-from-bottom duration-300">
+          <div className="w-8 h-8 rounded-lg bg-neutral-100 text-neutral-900 flex items-center justify-center shrink-0">
+            <Store className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold text-slate-950 truncate">
+            <p className="text-[11px] font-bold text-neutral-950 truncate">
               {RECENT_PURCHASES[toastIndex].store}
             </p>
-            <p className="text-[10px] text-slate-500 truncate">
+            <p className="text-[10px] text-neutral-500 truncate">
               Зареди {RECENT_PURCHASES[toastIndex].item}
             </p>
-            <span className="text-[9px] text-slate-400">{RECENT_PURCHASES[toastIndex].city} &bull; {RECENT_PURCHASES[toastIndex].time}</span>
+            <span className="text-[9px] text-neutral-400 font-mono">{RECENT_PURCHASES[toastIndex].city} &bull; {RECENT_PURCHASES[toastIndex].time}</span>
           </div>
         </div>
       )}
