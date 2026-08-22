@@ -10,7 +10,9 @@ import {
   Lock, 
   Star,
   Plus,
-  Minus
+  Minus,
+  X,
+  Sparkles
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
@@ -87,6 +89,31 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState("Всички");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
+
+  // Welcome Registration Pop-up State
+  const [showWelcomePopup, setShowWelcomePopup] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      const isDismissed = sessionStorage.getItem("optom_welcome_dismissed");
+      if (!isDismissed) {
+        const timer = setTimeout(() => {
+          setShowWelcomePopup(true);
+        }, 5000); // 5 секунди след влизане в сайта
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user]);
+
+  const handleDismissWelcome = () => {
+    setShowWelcomePopup(false);
+    sessionStorage.setItem("optom_welcome_dismissed", "true");
+  };
+
+  const handleOpenRegisterFromPopup = () => {
+    handleDismissWelcome();
+    setIsAuthOpen(true);
+  };
 
   const getApiBaseUrl = () => {
     if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
@@ -536,6 +563,47 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* 8. FAIRE-STYLE WELCOME REGISTRATION POPUP */}
+      {showWelcomePopup && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl border border-[#EBE8E3] text-[#121212] relative text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <button
+              onClick={handleDismissWelcome}
+              className="absolute top-4 right-4 text-[#737373] hover:text-[#121212] p-1 cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="w-12 h-12 rounded-full bg-[#FAF9F7] border border-[#EBE8E3] flex items-center justify-center mx-auto text-[#121212]">
+              <Sparkles className="w-5 h-5" />
+            </div>
+
+            <div>
+              <span className="text-xl font-serif font-black tracking-[0.2em] uppercase">OPTOM</span>
+              <h3 className="text-2xl font-serif font-normal mt-2">Отключете заводските цени на едро</h3>
+              <p className="text-xs text-[#737373] mt-2 leading-relaxed">
+                Регистрирайте своя търговски обект за достъп до ценоразписи на производители, отложено плащане Net 60 дни и безплатна доставка.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={handleOpenRegisterFromPopup}
+                className="w-full py-3 bg-[#121212] hover:bg-neutral-800 text-white font-semibold text-xs rounded-md shadow-xs transition-all cursor-pointer"
+              >
+                Регистрация за търговски обекти
+              </button>
+              <button
+                onClick={handleDismissWelcome}
+                className="w-full py-2.5 text-xs text-[#737373] hover:text-[#121212] transition-colors cursor-pointer"
+              >
+                Продължи като гост
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!isSupplier && <CartDrawer />}
     </div>
