@@ -14,10 +14,15 @@ export interface CartProduct {
   rrpPrice: number;
   imageUrl: string;
   hasTieredDiscount?: boolean;
+  has_tiered_discount?: boolean;
   tier1Qty?: number;
+  tier1_qty?: number;
   tier1Discount?: number;
+  tier1_discount?: number;
   tier2Qty?: number;
+  tier2_qty?: number;
   tier2Discount?: number;
+  tier2_discount?: number;
 }
 
 export interface CartItem {
@@ -26,21 +31,26 @@ export interface CartItem {
 }
 
 export function getTieredPrice(product: CartProduct, cases: number): { effectivePrice: number; discountPercent: number } {
-  if (product.hasTieredDiscount === false) {
+  if (!product || !product.casePrice) {
+    return { effectivePrice: 0, discountPercent: 0 };
+  }
+
+  const isEnabled = product.hasTieredDiscount !== false && product.has_tiered_discount !== false;
+  if (!isEnabled) {
     return { effectivePrice: product.casePrice, discountPercent: 0 };
   }
 
-  const t2Qty = product.tier2Qty || 10;
-  const t2Disc = product.tier2Discount || 10.0;
-  const t1Qty = product.tier1Qty || 5;
-  const t1Disc = product.tier1Discount || 5.0;
+  const t2Qty = Number(product.tier2Qty ?? product.tier2_qty ?? 10);
+  const t2Disc = Number(product.tier2Discount ?? product.tier2_discount ?? 10.0);
+  const t1Qty = Number(product.tier1Qty ?? product.tier1_qty ?? 5);
+  const t1Disc = Number(product.tier1Discount ?? product.tier1_discount ?? 5.0);
 
   if (cases >= t2Qty && t2Disc > 0) {
     const discounted = product.casePrice * (1 - t2Disc / 100);
-    return { effectivePrice: +discounted.toFixed(2), discountPercent: t2Disc };
+    return { effectivePrice: Math.round(discounted * 100) / 100, discountPercent: t2Disc };
   } else if (cases >= t1Qty && t1Disc > 0) {
     const discounted = product.casePrice * (1 - t1Disc / 100);
-    return { effectivePrice: +discounted.toFixed(2), discountPercent: t1Disc };
+    return { effectivePrice: Math.round(discounted * 100) / 100, discountPercent: t1Disc };
   }
 
   return { effectivePrice: product.casePrice, discountPercent: 0 };
@@ -74,16 +84,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         setItems(JSON.parse(saved));
       }
     } catch (e) {
-      console.error("Грешка при зареждане на количката от localStorage:", e);
+      console.error("Грешка при зареждане на количката:", e);
     }
   }, []);
 
   useEffect(() => {
     try {
       localStorage.setItem("optom_cart", JSON.stringify(items));
-    } catch (e) {
-      console.error("Грешка при запис на количката в localStorage:", e);
-    }
+    } catch (e) {}
   }, [items]);
 
   const addToCart = (product: CartProduct, cases: number = 1) => {
@@ -108,11 +116,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         addToCart(customEvent.detail, 1);
       }
     };
-
     window.addEventListener("optom:add-to-cart", handleGlobalAddToCart);
-    return () => {
-      window.removeEventListener("optom:add-to-cart", handleGlobalAddToCart);
-    };
+    return () => window.removeEventListener("optom:add-to-cart", handleGlobalAddToCart);
   }, []);
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -179,8 +184,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
 export function useCart() {
   const context = useContext(CartContext);
-  if (!context) {
-    throw new Error("useCart must be used within a CartProvider");
-  }
+  if (!context) throw new Error("useCart must be used within a CartProvider");
   return context;
 }
