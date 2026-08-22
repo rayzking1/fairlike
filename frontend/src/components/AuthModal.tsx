@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Eye, EyeOff, X, Building2, Store, Lock, Mail, Building, MapPin, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, X, Store, Building2 } from "lucide-react";
 import { useAuth, User } from "@/context/AuthContext";
 
 declare global {
@@ -19,7 +19,7 @@ export default function AuthModal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Form states
+  // Полета на формата
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -27,7 +27,6 @@ export default function AuthModal() {
   const [mol, setMol] = useState("");
   const [address, setAddress] = useState("");
 
-  // Зареждане на Google Identity Services SDK
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedEmail = localStorage.getItem("optom_remembered_email");
@@ -118,7 +117,6 @@ export default function AuthModal() {
 
     const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
-    // 1. Ако има конфигуриран истински Google OAuth Client ID в средата
     if (googleClientId && window.google?.accounts?.oauth2) {
       try {
         const client = window.google.accounts.oauth2.initTokenClient({
@@ -149,18 +147,17 @@ export default function AuthModal() {
         client.requestAccessToken();
         return;
       } catch (err) {
-        console.error("Google SSO инициализация:", err);
+        console.error("Google SSO грешка:", err);
       }
     }
 
-    // 2. Интерактивен истински поп-ъп за въвеждане на твоя реален Google акаунт
-    const userPromptEmail = window.prompt("Въведете вашия реален Google / Gmail имейл адрес за вход:");
+    const userPromptEmail = window.prompt("Въведете вашия Google / служебен имейл адрес:");
     if (userPromptEmail && userPromptEmail.includes("@")) {
       const cleanEmail = userPromptEmail.trim().toLowerCase();
       const extractedName = cleanEmail.split("@")[0].toUpperCase();
       syncGoogleUserToBackend({
         email: cleanEmail,
-        name: `Търговски Обект ${extractedName}`
+        name: role === "supplier" ? `Фабрика ${extractedName}` : `Търговски Обект ${extractedName}`
       });
     } else {
       setLoading(false);
@@ -223,43 +220,44 @@ export default function AuthModal() {
         handleClose();
       }
     } catch (err: any) {
-      setError(err.message || "Възникна грешка при автентикацията.");
+      setError(err.message || "Възникна грешка при вход.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
-      
-      <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl border border-slate-100 text-slate-800 relative animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-xs flex flex-col items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-xl border border-[#EBE8E3] text-[#121212] relative">
         
-        {/* Лого */}
+        {/* Затваряне */}
+        <button
+          onClick={handleClose}
+          className="absolute top-5 right-5 text-neutral-400 hover:text-[#121212] p-1 cursor-pointer transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        {/* Заглавна бранд част (Faire-стил) */}
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black text-base shadow-sm">
-              O
-            </div>
-            <span className="text-2xl font-black tracking-tight text-slate-900">
-              OPTOM<span className="text-emerald-600">.BG</span>
-            </span>
-          </div>
-          <p className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400">
-            Официален B2B Маркетплейс
+          <span className="text-2xl font-serif font-black tracking-[0.2em] text-[#121212] uppercase">
+            OPTOM
+          </span>
+          <p className="text-[10px] uppercase font-mono tracking-widest text-[#737373] mt-1">
+            B2B Пазар на едро
           </p>
         </div>
 
-        {/* Избор на роля */}
-        <div className="mb-5">
-          <label className="block text-[11px] font-bold text-slate-500 mb-1.5 text-center">Изберете типа на вашия бизнес:</label>
-          <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+        {/* Избор на тип профил */}
+        <div className="mb-6">
+          <div className="grid grid-cols-2 gap-1.5 bg-[#FAF9F7] p-1 rounded-lg border border-[#EBE8E3]">
             <button
               type="button"
               onClick={() => setRole("retailer")}
-              className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 role === "retailer" 
-                  ? "bg-white text-slate-950 shadow-sm" 
-                  : "text-slate-500 hover:text-slate-900"
+                  ? "bg-white text-[#121212] shadow-xs border border-[#EBE8E3]" 
+                  : "text-[#737373] hover:text-[#121212]"
               }`}
             >
               <Store className="w-3.5 h-3.5" /> Магазин / Обект
@@ -267,28 +265,28 @@ export default function AuthModal() {
             <button
               type="button"
               onClick={() => setRole("supplier")}
-              className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 role === "supplier" 
-                  ? "bg-slate-950 text-white shadow-sm" 
-                  : "text-slate-500 hover:text-slate-900"
+                  ? "bg-white text-[#121212] shadow-xs border border-[#EBE8E3]" 
+                  : "text-[#737373] hover:text-[#121212]"
               }`}
             >
-              <Building2 className="w-3.5 h-3.5 text-emerald-400" /> Производител
+              <Building2 className="w-3.5 h-3.5" /> Фабрика / Вносител
             </button>
           </div>
         </div>
 
-        {/* Заглавие */}
-        <div className="text-left mb-4">
-          <h2 className="text-xl font-black text-slate-900">
+        {/* Описание */}
+        <div className="text-left mb-5">
+          <h2 className="text-lg font-serif font-normal text-[#121212]">
             {mode === "login" 
-              ? (role === "supplier" ? "Вход за Производители" : "Вход за Магазини") 
-              : (role === "supplier" ? "Регистрация на Фабрика" : "Регистрация на Магазин")}
+              ? (role === "supplier" ? "Вход за производители" : "Вход за търговски обекти") 
+              : (role === "supplier" ? "Регистрация на фабрика" : "Регистрация на магазин")}
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+          <p className="text-xs text-[#737373] mt-0.5 leading-relaxed">
             {role === "supplier" 
-              ? "Достъп до панела за доставки, поръчки и качване на стекове." 
-              : "Отключете заводските цени на едро и Net 60 отсрочка."}
+              ? "Управлявайте каталога със стекове, наличностите и поръчките." 
+              : "Отключете заводски цени на едро и Net 60 отсрочка."}
           </p>
         </div>
 
@@ -297,7 +295,7 @@ export default function AuthModal() {
           type="button"
           onClick={handleGoogleAuth}
           disabled={loading}
-          className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer disabled:opacity-60 mb-4 hover:border-slate-300"
+          className="w-full py-2.5 px-4 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] rounded-md text-xs font-semibold text-[#121212] flex items-center justify-center gap-2.5 transition-all shadow-2xs cursor-pointer disabled:opacity-60 mb-4"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -305,28 +303,29 @@ export default function AuthModal() {
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
           </svg>
-          <span>Продължи с Google ({role === "supplier" ? "Производител" : "Магазин"})</span>
+          <span>Продължи с Google</span>
         </button>
 
         <div className="relative flex items-center justify-center my-4">
-          <div className="border-t border-slate-200 w-full" />
-          <span className="bg-white px-3 text-[10px] font-extrabold uppercase text-slate-400 tracking-wider absolute">
-            ИЛИ
+          <div className="border-t border-[#EBE8E3] w-full" />
+          <span className="bg-white px-3 text-[10px] font-mono uppercase text-[#737373] absolute">
+            или
           </span>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium">
+          <div className="mb-4 p-2.5 bg-neutral-50 border border-neutral-200 text-neutral-900 text-xs rounded-md">
             {error}
           </div>
         )}
 
+        {/* Форма */}
         <form onSubmit={handleSubmit} className="space-y-3.5 text-left" autoComplete="on">
           
           {mode === "register" && (
-            <div className="space-y-3 pb-2 border-b border-slate-100">
+            <div className="space-y-3 pb-2 border-b border-[#EBE8E3]">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                <label className="block text-[11px] font-semibold text-[#121212] mb-1">
                   {role === "supplier" ? "Име на фабриката / Бранд *" : "Име на фирмата / Обект *"}
                 </label>
                 <input
@@ -335,51 +334,51 @@ export default function AuthModal() {
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder={role === "supplier" ? "напр. Монделийз България" : "напр. Детелина 2020 ЕООД"}
-                  className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  className="w-full text-xs px-3 py-2 bg-[#FAF9F7] border border-[#EBE8E3] rounded-md focus:outline-none focus:border-[#121212] focus:bg-white"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">ЕИК / БУЛСТАТ *</label>
+                  <label className="block text-[11px] font-semibold text-[#121212] mb-1">ЕИК / БУЛСТАТ *</label>
                   <input
                     type="text"
                     required
                     value={eik}
                     onChange={(e) => setEik(e.target.value)}
                     placeholder="206894123"
-                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-600 focus:bg-white"
+                    className="w-full text-xs px-3 py-2 bg-[#FAF9F7] border border-[#EBE8E3] rounded-md font-mono focus:outline-none focus:border-[#121212] focus:bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">МОЛ *</label>
+                  <label className="block text-[11px] font-semibold text-[#121212] mb-1">МОЛ *</label>
                   <input
                     type="text"
                     required
                     value={mol}
                     onChange={(e) => setMol(e.target.value)}
                     placeholder="Иван Петров"
-                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
+                    className="w-full text-xs px-3 py-2 bg-[#FAF9F7] border border-[#EBE8E3] rounded-md focus:outline-none focus:border-[#121212] focus:bg-white"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Адрес на седалище / склад *</label>
+                <label className="block text-[11px] font-semibold text-[#121212] mb-1">Адрес на обект / склад *</label>
                 <input
                   type="text"
                   required
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="гр. София, бул. Цариградско шосе 115"
-                  className="w-full text-xs px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  className="w-full text-xs px-3 py-2 bg-[#FAF9F7] border border-[#EBE8E3] rounded-md focus:outline-none focus:border-[#121212] focus:bg-white"
                 />
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">Имейл адрес *</label>
+            <label className="block text-[11px] font-semibold text-[#121212] mb-1">Служебен имейл адрес *</label>
             <input
               type="email"
               autoComplete="username email"
@@ -387,12 +386,12 @@ export default function AuthModal() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="sales@company.bg"
-              className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
+              className="w-full text-xs px-3 py-2 bg-[#FAF9F7] border border-[#EBE8E3] rounded-md focus:outline-none focus:border-[#121212] focus:bg-white"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">Парола *</label>
+            <label className="block text-[11px] font-semibold text-[#121212] mb-1">Парола *</label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
@@ -401,26 +400,26 @@ export default function AuthModal() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white pr-10"
+                className="w-full text-xs px-3 py-2 bg-[#FAF9F7] border border-[#EBE8E3] rounded-md focus:outline-none focus:border-[#121212] focus:bg-white pr-9"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                className="absolute right-2.5 top-2 text-neutral-400 hover:text-[#121212] cursor-pointer p-0.5"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>
 
           {mode === "login" && (
-            <div className="flex items-center justify-between text-xs pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-600 text-[11px]">
+            <div className="flex items-center justify-between text-xs pt-0.5">
+              <label className="flex items-center gap-2 cursor-pointer text-[#525252] text-[11px]">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
+                  className="rounded border-[#EBE8E3] text-[#121212] focus:ring-0 h-3.5 w-3.5"
                 />
                 <span>Запомни ме</span>
               </label>
@@ -428,7 +427,7 @@ export default function AuthModal() {
               <button
                 type="button"
                 onClick={() => alert("Линк за нова парола е изпратен.")}
-                className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                className="text-[11px] font-medium text-[#121212] hover:underline cursor-pointer"
               >
                 Забравена парола?
               </button>
@@ -438,22 +437,24 @@ export default function AuthModal() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-[#7CB342] hover:bg-[#689F38] text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-60 uppercase tracking-wider mt-2"
+            className="w-full py-2.5 bg-[#121212] hover:bg-neutral-800 text-white font-semibold text-xs rounded-md shadow-xs transition-all cursor-pointer disabled:opacity-60 uppercase tracking-wider mt-2"
           >
             {loading 
               ? "Обработка..." 
-              : mode === "login" ? `Вход като ${role === "supplier" ? "Производител" : "Магазин"}` : `Регистрация на ${role === "supplier" ? "Производител" : "Магазин"}`}
+              : mode === "login" 
+                ? (role === "supplier" ? "Вход като производител" : "Вход като магазин") 
+                : (role === "supplier" ? "Регистрация на фабрика" : "Регистрация на магазин")}
           </button>
         </form>
 
-        <div className="text-center mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500">
+        <div className="text-center mt-5 pt-4 border-t border-[#EBE8E3] text-xs text-[#525252]">
           {mode === "login" ? (
             <span>
               Нямате фирмен акаунт?{" "}
               <button
                 type="button"
                 onClick={() => setMode("register")}
-                className="font-bold text-emerald-700 hover:underline cursor-pointer"
+                className="font-semibold text-[#121212] hover:underline cursor-pointer"
               >
                 Регистрация
               </button>
@@ -464,7 +465,7 @@ export default function AuthModal() {
               <button
                 type="button"
                 onClick={() => setMode("login")}
-                className="font-bold text-emerald-700 hover:underline cursor-pointer"
+                className="font-semibold text-[#121212] hover:underline cursor-pointer"
               >
                 Влезте тук
               </button>
@@ -472,15 +473,6 @@ export default function AuthModal() {
           )}
         </div>
       </div>
-
-      <button
-        type="button"
-        onClick={handleClose}
-        className="mt-4 px-5 py-2 bg-white/90 hover:bg-white text-slate-800 rounded-full text-xs font-bold shadow-lg flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105"
-      >
-        <X className="w-3.5 h-3.5" />
-        <span>Затвори</span>
-      </button>
     </div>
   );
 }
