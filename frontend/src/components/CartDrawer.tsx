@@ -19,9 +19,11 @@ import {
   Download, 
   AlertCircle, 
   Store, 
-  PartyPopper 
+  PartyPopper,
+  Tags,
+  Percent
 } from "lucide-react";
-import { useCart, CartProduct } from "@/context/CartContext";
+import { useCart, CartProduct, getTieredPrice } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 
 interface CartDrawerProps {
@@ -105,7 +107,8 @@ export default function CartDrawer(props: CartDrawerProps) {
     cartTotal: contextTotal, 
     vatAmount: contextVat, 
     grandTotal: contextGrandTotal, 
-    estimatedTotalProfit: contextProfit 
+    estimatedTotalProfit: contextProfit,
+    totalSavedFromTiers
   } = useCart();
   
   const { user, setIsAuthOpen } = useAuth();
@@ -171,7 +174,8 @@ export default function CartDrawer(props: CartDrawerProps) {
     contextItems.forEach((item) => {
       const supplier = item.product.supplierName || "Официален Дистрибутор";
       const min = item.product.supplierMinimum || 50.0;
-      const lineTotal = item.quantityCases * item.product.casePrice;
+      const { effectivePrice } = getTieredPrice(item.product, item.quantityCases);
+      const lineTotal = item.quantityCases * effectivePrice;
 
       if (!groups[supplier]) {
         groups[supplier] = {
@@ -240,11 +244,14 @@ export default function CartDrawer(props: CartDrawerProps) {
       address: formData.address || (user?.address) || "гр. София",
       eik: formData.eik || (user?.eik) || "206894123",
       paymentTerms: formData.paymentTerms,
-      items: items.map(it => ({
-        productId: it.product.id,
-        quantityCases: it.quantityCases,
-        casePrice: it.product.casePrice
-      })),
+      items: items.map(it => {
+        const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
+        return {
+          productId: it.product.id,
+          quantityCases: it.quantityCases,
+          casePrice: effectivePrice
+        };
+      }),
       subtotal: cartTotal,
       vat: vatAmount,
       total: grandTotal,
@@ -392,40 +399,68 @@ export default function CartDrawer(props: CartDrawerProps) {
                           </div>
 
                           <div className="p-3 divide-y divide-slate-100 space-y-2.5">
-                            {group.items.map((item) => (
-                              <div key={item.product.id} className="flex gap-3 pt-2.5 first:pt-0">
-                                <img 
-                                  src={item.product.imageUrl} 
-                                  alt={item.product.name} 
-                                  className="w-12 h-12 object-contain rounded-lg bg-slate-50 border border-slate-200 shrink-0 p-1" 
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="text-xs font-bold text-slate-900 truncate">{item.product.name}</h4>
-                                  <p className="text-[10px] text-slate-400">Стек от {item.product.unitsPerCase} бр. &bull; {item.product.casePrice.toFixed(2)} лв./стек</p>
-                                  
-                                  <div className="flex items-center justify-between mt-2">
-                                    <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-lg p-0.5">
-                                      <button 
-                                        onClick={() => contextUpdateQty(item.product.id, item.quantityCases - 1)}
-                                        className="p-1 hover:bg-white text-slate-600 rounded cursor-pointer"
-                                      >
-                                        <Minus className="w-3 h-3" />
-                                      </button>
-                                      <span className="text-xs font-bold px-1 font-mono">{item.quantityCases}</span>
-                                      <button 
-                                        onClick={() => contextUpdateQty(item.product.id, item.quantityCases + 1)}
-                                        className="p-1 hover:bg-white text-slate-600 rounded cursor-pointer"
-                                      >
-                                        <Plus className="w-3 h-3" />
-                                      </button>
+                            {group.items.map((item) => {
+                              const { effectivePrice, discountPercent } = getTieredPrice(item.product, item.quantityCases);
+                              const lineTotal = item.quantityCases * effectivePrice;
+                              const normalLineTotal = item.quantityCases * item.product.casePrice;
+                              const lineSavings = Math.max(0, normalLineTotal - lineTotal);
+
+                              return (
+                                <div key={item.product.id} className="flex gap-3 pt-2.5 first:pt-0">
+                                  <img 
+                                    src={item.product.imageUrl} 
+                                    alt={item.product.name} 
+                                    className="w-12 h-12 object-contain rounded-lg bg-slate-50 border border-slate-200 shrink-0 p-1" 
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <h4 className="text-xs font-bold text-slate-900 truncate">{item.product.name}</h4>
+                                      {discountPercent > 0 && (
+                                        <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 flex items-center gap-0.5">
+                                          <Percent className="w-2.5 h-2.5" /> -{discountPercent}% обем
+                                        </span>
+                                      )}
                                     </div>
-                                    <span className="text-xs font-black text-slate-900 font-mono">
-                                      {(item.quantityCases * item.product.casePrice).toFixed(2)} лв.
-                                    </span>
+                                    
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                      {discountPercent > 0 ? (
+                                        <div className="flex items-center gap-1.5 font-mono">
+                                          <span className="line-through text-slate-400">{item.product.casePrice.toFixed(2)}</span>
+                                          <span className="font-bold text-emerald-700">{effectivePrice.toFixed(2)} лв./стек</span>
+                                          <span className="text-emerald-600 font-semibold">(-{lineSavings.toFixed(2)} лв.)</span>
+                                        </div>
+                                      ) : (
+                                        <span>Стек: {item.product.casePrice.toFixed(2)} лв. (5+ бр. за отстъпка)</span>
+                                      )}
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-between mt-2">
+                                      <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-lg p-0.5">
+                                        <button 
+                                          onClick={() => contextUpdateQty(item.product.id, item.quantityCases - 1)}
+                                          className="p-1 hover:bg-white text-slate-600 rounded cursor-pointer"
+                                        >
+                                          <Minus className="w-3 h-3" />
+                                        </button>
+                                        <span className="text-xs font-bold px-1 font-mono">{item.quantityCases}</span>
+                                        <button 
+                                          onClick={() => contextUpdateQty(item.product.id, item.quantityCases + 1)}
+                                          className="p-1 hover:bg-white text-slate-600 rounded cursor-pointer"
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                      
+                                      <div className="text-right">
+                                        <span className={`text-xs font-mono font-black ${discountPercent > 0 ? "text-emerald-700" : "text-slate-900"}`}>
+                                          {lineTotal.toFixed(2)} лв.
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       );
@@ -628,6 +663,16 @@ export default function CartDrawer(props: CartDrawerProps) {
 
           {step !== "success" && items.length > 0 && (
             <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-3">
+              {totalSavedFromTiers > 0 && (
+                <div className="bg-emerald-100 border border-emerald-300 rounded-xl p-2.5 flex items-center justify-between text-xs text-emerald-950 font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <Tags className="w-4 h-4 text-emerald-700" />
+                    <span>Спестени от обемни отстъпки:</span>
+                  </span>
+                  <span className="font-mono text-sm text-emerald-800 font-black">-{totalSavedFromTiers.toFixed(2)} лв.</span>
+                </div>
+              )}
+
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
                 <span className="text-emerald-800 font-medium flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Прогнозен марж за магазина:
@@ -638,11 +683,11 @@ export default function CartDrawer(props: CartDrawerProps) {
               <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between text-slate-500">
                   <span>Данъчна основа (без ДДС):</span>
-                  <span className="font-semibold text-slate-800">{cartTotal.toFixed(2)} лв.</span>
+                  <span className="font-semibold text-slate-800 font-mono">{cartTotal.toFixed(2)} лв.</span>
                 </div>
                 <div className="flex justify-between text-slate-500">
                   <span>ДДС (20%):</span>
-                  <span className="font-semibold text-slate-800">{vatAmount.toFixed(2)} лв.</span>
+                  <span className="font-semibold text-slate-800 font-mono">{vatAmount.toFixed(2)} лв.</span>
                 </div>
                 <div className="flex justify-between text-sm font-black text-slate-900 pt-1.5 border-t border-slate-200">
                   <span>Общо за плащане с ДДС:</span>
