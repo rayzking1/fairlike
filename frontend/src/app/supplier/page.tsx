@@ -15,13 +15,14 @@ import {
   Edit2, 
   Search, 
   XCircle, 
-  Boxes,
-  FileDown,
-  Percent,
-  FileUp,
-  Truck,
-  Lock,
-  Building2
+  Boxes, 
+  FileDown, 
+  Percent, 
+  FileUp, 
+  Truck, 
+  Lock, 
+  FileText,
+  Printer
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
@@ -64,6 +65,7 @@ export default function SupplierDashboardPage() {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
+  const [downloadingDeliveryId, setDownloadingDeliveryId] = useState<string | null>(null);
 
   const [catalogSearch, setCatalogSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -165,6 +167,28 @@ export default function SupplierDashboardPage() {
   const supplierOrders = useMemo(() => {
     return orders;
   }, [orders]);
+
+  const handleDownloadDeliveryNote = async (orderId: string) => {
+    setDownloadingDeliveryId(orderId);
+    const baseUrl = getApiBaseUrl();
+    try {
+      const res = await fetch(`${baseUrl}/api/orders/${orderId}/delivery-note`);
+      if (!res.ok) throw new Error("Експедиционният лист не можа да бъде генериран");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Ekspeditsionen_List_${orderId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err: any) {
+      alert(err.message || "Грешка при изтегляне");
+    } finally {
+      setDownloadingDeliveryId(null);
+    }
+  };
 
   const handleExportOrdersToExcel = () => {
     if (supplierOrders.length === 0) {
@@ -383,7 +407,6 @@ export default function SupplierDashboardPage() {
     setStatusUpdating(null);
   };
 
-  // ROUTE GUARD: Ако не е вписан с роля supplier, показваме изчистен екран за автентикация
   if (!user || user.role !== "supplier") {
     return (
       <div className="min-h-screen bg-white text-[#121212] antialiased">
@@ -685,7 +708,7 @@ export default function SupplierDashboardPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-xl font-serif font-normal text-[#121212]">Заявки за изпълнение от магазини</h2>
-                <p className="text-xs text-[#737373]">Променяйте статусите, за да информирате обектите за натоварването и доставката.</p>
+                <p className="text-xs text-[#737373]">Променяйте статусите и разпечатвайте експедиционни листи за шофьорите.</p>
               </div>
 
               {supplierOrders.length > 0 && (
@@ -725,44 +748,56 @@ export default function SupplierDashboardPage() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-1.5 bg-[#FAF9F7] p-1.5 rounded-lg border border-[#EBE8E3] shrink-0">
-                        <span className="text-[10px] font-mono uppercase text-[#737373] mr-1">Статус:</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Бутон за експедиционен лист */}
                         <button
-                          onClick={() => handleUpdateStatus(order.id, "pending")}
-                          disabled={statusUpdating === order.id}
-                          className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
-                            currentStatus === "pending" ? "bg-[#121212] text-white shadow-xs" : "text-[#525252] hover:bg-white"
-                          }`}
+                          onClick={() => handleDownloadDeliveryNote(order.id)}
+                          disabled={downloadingDeliveryId === order.id}
+                          className="px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] text-[#121212] border border-[#EBE8E3] rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+                          title="Разпечатай експедиционен лист за шофьора"
                         >
-                          Приета
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>{downloadingDeliveryId === order.id ? "Генериране..." : "Експедиционен лист"}</span>
                         </button>
-                        <button
-                          onClick={() => handleUpdateStatus(order.id, "processing")}
-                          disabled={statusUpdating === order.id}
-                          className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
-                            currentStatus === "processing" ? "bg-[#121212] text-white shadow-xs" : "text-[#525252] hover:bg-white"
-                          }`}
-                        >
-                          В подготовка
-                        </button>
-                        <button
-                          onClick={() => handleUpdateStatus(order.id, "shipped")}
-                          disabled={statusUpdating === order.id}
-                          className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
-                            currentStatus === "shipped" ? "bg-[#121212] text-white shadow-xs" : "text-[#525252] hover:bg-white"
-                          }`}
-                        >
-                          Натоварена
-                        </button>
-                        <button
-                          onClick={() => handleUpdateStatus(order.id, "delivered")}
-                          disabled={statusUpdating === order.id}
-                          className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${
-                            currentStatus === "delivered" ? "bg-[#121212] text-white shadow-xs" : "text-[#525252] hover:bg-white"
-                          }`}
-                        >
-                          Доставена
-                        </button>
+
+                        <div className="flex items-center gap-1 bg-[#FAF9F7] p-1 rounded-lg border border-[#EBE8E3]">
+                          <button
+                            onClick={() => handleUpdateStatus(order.id, "pending")}
+                            disabled={statusUpdating === order.id}
+                            className={`px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
+                              currentStatus === "pending" ? "bg-[#121212] text-white shadow-xs" : "text-[#525252] hover:bg-white"
+                            }`}
+                          >
+                            Приета
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStatus(order.id, "processing")}
+                            disabled={statusUpdating === order.id}
+                            className={`px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
+                              currentStatus === "processing" ? "bg-[#121212] text-white shadow-xs" : "text-[#525252] hover:bg-white"
+                            }`}
+                          >
+                            В подготовка
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStatus(order.id, "shipped")}
+                            disabled={statusUpdating === order.id}
+                            className={`px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
+                              currentStatus === "shipped" ? "bg-[#121212] text-white shadow-xs" : "text-[#525252] hover:bg-white"
+                            }`}
+                          >
+                            Натоварена
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStatus(order.id, "delivered")}
+                            disabled={statusUpdating === order.id}
+                            className={`px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
+                              currentStatus === "delivered" ? "bg-[#121212] text-white shadow-xs" : "text-[#525252] hover:bg-white"
+                            }`}
+                          >
+                            Доставена
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

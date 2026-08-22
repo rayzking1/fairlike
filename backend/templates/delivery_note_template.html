@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <title>Експедиционен Лист № {{ delivery_number }}</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 15mm;
+        }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #121212;
+            font-size: 11px;
+            line-height: 1.4;
+            margin: 0;
+            padding: 0;
+        }
+        .header-table {
+            width: 100%;
+            border-bottom: 2px solid #121212;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+        .brand-title {
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .doc-title {
+            font-size: 16px;
+            font-weight: bold;
+            text-align: right;
+            text-transform: uppercase;
+        }
+        .doc-meta {
+            font-size: 10px;
+            color: #525252;
+            text-align: right;
+            font-family: monospace;
+        }
+        .info-grid {
+            width: 100%;
+            margin-bottom: 20px;
+            border-collapse: collapse;
+        }
+        .info-box {
+            width: 48%;
+            vertical-align: top;
+            background-color: #faf9f7;
+            border: 1px solid #ebe8e3;
+            border-radius: 6px;
+            padding: 10px 12px;
+        }
+        .info-box h4 {
+            margin: 0 0 6px 0;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #737373;
+            border-bottom: 1px solid #ebe8e3;
+            padding-bottom: 4px;
+        }
+        .info-box p {
+            margin: 2px 0;
+            font-size: 11px;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .items-table th {
+            background-color: #121212;
+            color: #ffffff;
+            font-size: 10px;
+            text-transform: uppercase;
+            padding: 8px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .items-table td {
+            padding: 8px;
+            border-bottom: 1px solid #ebe8e3;
+            font-size: 11px;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .font-mono { font-family: monospace; }
+        .summary-box {
+            width: 100%;
+            margin-bottom: 30px;
+            background-color: #faf9f7;
+            border: 1px solid #ebe8e3;
+            border-radius: 6px;
+            padding: 10px 14px;
+        }
+        .signatures-table {
+            width: 100%;
+            margin-top: 40px;
+            border-collapse: collapse;
+        }
+        .signatures-table td {
+            width: 48%;
+            vertical-align: top;
+            padding-top: 10px;
+        }
+        .sign-line {
+            border-bottom: 1px solid #121212;
+            margin-top: 45px;
+            margin-bottom: 4px;
+        }
+        .footer-note {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 9px;
+            color: #737373;
+            border-top: 1px solid #ebe8e3;
+            padding-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ХЕДЪР НА ДОКУМЕНТА -->
+    <table class="header-table">
+        <tr>
+            <td style="vertical-align: middle;">
+                <div class="brand-title">OPTOM.BG</div>
+                <div style="font-size: 10px; color: #737373;">B2B Логистичен модул за директни доставки</div>
+            </td>
+            <td style="vertical-align: middle;">
+                <div class="doc-title">Експедиционен Лист</div>
+                <div class="doc-meta">№ {{ delivery_number }} &bull; Дата: {{ issue_date }}</div>
+                <div class="doc-meta">Към B2B Поръчка: #{{ order_id }}</div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- ДАННИ ЗА ДОСТАВЧИК И КЛИЕНТ -->
+    <table class="info-grid">
+        <tr>
+            <td class="info-box">
+                <h4>ИЗПРАЩАЧ / ПРОИЗВОДИТЕЛ</h4>
+                <p><strong>{{ supplier.name }}</strong></p>
+                <p>ЕИК: <span class="font-mono">{{ supplier.eik }}</span> &bull; ДДС: <span class="font-mono">{{ supplier.vat_number }}</span></p>
+                <p>Адрес на склад: {{ supplier.address }}</p>
+                <p>МОЛ / Експедитор: {{ supplier.mol }}</p>
+            </td>
+            <td style="width: 4%;"></td>
+            <td class="info-box">
+                <h4>ПОЛУЧАТЕЛ / ОБЕКТ ЗА ДОСТАВКА</h4>
+                <p><strong>{{ buyer.name }}</strong></p>
+                <p>ЕИК: <span class="font-mono">{{ buyer.eik }}</span></p>
+                <p><strong>Адрес за доставка:</strong> {{ buyer.address }}</p>
+                <p>Имейл / Лице за контакт: {{ buyer.email }}</p>
+            </td>
+        </tr>
+    </table>
+
+    <!-- ТАБЛИЦА СЪС СТЕКОВЕ ЗА ТОВАРЕНЕ И ПРЕДАВАНЕ -->
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th style="width: 5%;" class="text-center">№</th>
+                <th style="width: 45%;">Артикул / Описание</th>
+                <th style="width: 20%;" class="text-center">Баркод (EAN)</th>
+                <th style="width: 15%;" class="text-center">Стекове (Кашони)</th>
+                <th style="width: 15%;" class="text-right">Общо единици</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td class="text-center font-mono">{{ loop.index }}</td>
+                <td>
+                    <strong>{{ item.name }}</strong>
+                    <div style="font-size: 9px; color: #737373;">{{ item.pack_details }}</div>
+                </td>
+                <td class="text-center font-mono">{{ item.ean }}</td>
+                <td class="text-center font-mono" style="font-size: 13px; font-weight: bold;">{{ item.quantity }} бр.</td>
+                <td class="text-right font-mono">{{ item.total_units }} бр.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- ОБОБЩЕНИЕ ЗА ШОФЬОРА -->
+    <div class="summary-box">
+        <table style="width: 100%;">
+            <tr>
+                <td style="font-size: 11px;">
+                    Общ брой стекове/колети за разтоварване: <strong>{{ total_cases }} бр.</strong><br>
+                    Условия на плащане по сделката: <strong class="font-mono">{{ payment_terms_label }}</strong>
+                </td>
+                <td style="text-align: right; font-size: 12px;">
+                    Стойност на поръчката: <strong class="font-mono">{{ total_due }} лв. с ДДС</strong>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- ПРЕДАВАТЕЛНО-ПРИЕМАТЕЛЕН ПРОТОКОЛ -->
+    <table class="signatures-table">
+        <tr>
+            <td>
+                <p><strong>ПРЕДАЛ (Шофьор / Експедитор):</strong></p>
+                <p style="font-size: 10px; color: #737373;">Стоката е предадена в изправен търговски вид.</p>
+                <div class="sign-line"></div>
+                <p style="font-size: 9px; color: #525252;">(Име, подпис и дата)</p>
+            </td>
+            <td style="width: 4%;"></td>
+            <td>
+                <p><strong>ПРИЕЛ (МОЛ / Управител на магазин):</strong></p>
+                <p style="font-size: 10px; color: #737373;">Стоката и бройките са приети без забележки.</p>
+                <div class="sign-line"></div>
+                <p style="font-size: 9px; color: #525252;">(Име, подпис и печат на обекта)</p>
+            </td>
+        </tr>
+    </table>
+
+    <div class="footer-note">
+        Документът удостоверява физическото предаване на стоките между производителя и търговския обект чрез платформата OPTOM.BG.
+    </div>
+
+</body>
+</html>

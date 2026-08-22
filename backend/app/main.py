@@ -150,7 +150,6 @@ app.add_middleware(
 app.include_router(invoices_router)
 app.include_router(auth_router)
 
-# --- ВАЛИДАЦИЯ НА БЪЛГАРСКИ ЕИК ПО АЛГОРИТЪМ НА ТЪРГОВСКИЯ РЕГИСТЪР ---
 def validate_bulgarian_eik(eik: str) -> bool:
     cleaned = "".join(ch for ch in eik if ch.isdigit())
     if len(cleaned) == 9:
@@ -304,6 +303,46 @@ def generate_order_invoice_pdf(order_dict: dict, items_data: list) -> bytes:
         print(f"⚠️ PDF error: {e}")
         return b""
 
+def generate_delivery_note_pdf(order_dict: dict, items_data: list) -> bytes:
+    try:
+        issue_date = date.today().strftime("%d.%m.%Y")
+        payment_term = order_dict.get("paymentTerms", "net60")
+        payment_label = "Net 60 дни отсрочка" if payment_term == "net60" else ("Net 30 дни" if payment_term == "net30" else "Плащане веднага")
+
+        total_cases = sum(it.get("quantity", 1) for it in items_data)
+
+        context = {
+            "delivery_number": f"EXP-{order_dict['id']}",
+            "order_id": order_dict['id'],
+            "issue_date": issue_date,
+            "payment_terms_label": payment_label,
+            "supplier": {
+                "name": "Официален Производител / Дистрибутор",
+                "eik": "206894123",
+                "vat_number": "BG206894123",
+                "address": "гр. София, Централен логистичен склад",
+                "mol": "Складов ръководител"
+            },
+            "buyer": {
+                "name": order_dict["storeName"],
+                "eik": order_dict.get("eik") or "Не е посочен",
+                "address": order_dict["address"],
+                "email": order_dict["invoiceEmail"]
+            },
+            "items": items_data,
+            "total_cases": total_cases,
+            "total_due": f"{order_dict['total']:.2f}"
+        }
+
+        template = jinja_env.get_template("delivery_note_template.html")
+        rendered_html = template.render(**context)
+        pdf_io = io.BytesIO()
+        HTML(string=rendered_html).write_pdf(pdf_io)
+        return pdf_io.getvalue()
+    except Exception as e:
+        print(f"⚠️ Delivery note PDF error: {e}")
+        return b""
+
 def trigger_direct_email(order_dict: dict, items_data: list):
     active_key = os.getenv("RESEND_API_KEY", "")
     if not active_key:
@@ -438,7 +477,6 @@ def add_product(item: ProductCreate, db: Session = Depends(get_db)):
     db.refresh(new_product)
     return new_product
 
-# --- ЕНДПОЙНТ ЗА МАСОВ ИМПОРТ НА EXCEL / CSV (.xlsx, .xls, .csv) ---
 @app.post("/api/products/import")
 async def import_products_file(
     file: UploadFile = File(...),
@@ -456,7 +494,6 @@ async def import_products_file(
         else:
             raise HTTPException(status_code=400, detail="Неподдържан файлов формат. Качете .xlsx, .xls или .csv")
 
-        # Нормализиране на имената на колоните
         col_map = {
             "име на артикул": "name",
             "име": "name",
@@ -511,7 +548,6 @@ async def import_products_file(
             supplier_name = str(row.get("supplier_name", default_supplier)).strip()
             supplier_min = float(row.get("supplier_minimum", 50.0)) if not pd.isna(row.get("supplier_minimum")) else 50.0
 
-            # Upsert по баркод
             existing = db.query(models.Product).filter(models.Product.barcode == barcode).first()
             if existing:
                 existing.name = str(row["name"]).strip()
@@ -593,6 +629,7 @@ def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks
             "pack_details": f"Стек от {prod.unitsPerCase} бр." if prod else "",
             "ean": prod.barcode if prod else "N/A",
             "quantity": it.quantityCases,
+            "total_units": it.quantityCases * (prod.unitsPerCase if prod else 24),
             "unit": "стека",
             "unit_price": it.casePrice,
             "total_price": round(it.quantityCases * it.casePrice, 2)
@@ -644,6 +681,7 @@ def download_order_invoice(order_id: str, db: Session = Depends(get_db)):
             "pack_details": f"Стек от {prod.unitsPerCase} бр." if prod else "",
             "ean": prod.barcode if prod else "N/A",
             "quantity": it.quantity_cases,
+            "total_units": it.quantity_cases * (prod.unitsPerCase if prod else 24),
             "unit": "стека",
             "unit_price": it.case_price,
             "total_price": round(it.quantity_cases * it.case_price, 2)
@@ -663,6 +701,44 @@ def download_order_invoice(order_id: str, db: Session = Depends(get_db)):
 
     pdf_bytes = generate_order_invoice_pdf(order_dict, items_data)
     return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Faktura_{order.id}.pdf"})
+
+# --- ЕНДПОЙНТ ЗА ИЗТЕГЛЯНЕ НА ЕКСПЕДИЦИОНЕН ЛИСТ (PDF) ---
+@app.get("/api/orders/{order_id}/delivery-note")
+def download_delivery_note(order_id: str, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Поръчката не е намерена")
+
+    order_items = db.query(models.OrderItem).filter(models.OrderItem.order_id == order_id).all()
+    items_data = []
+    for it in order_items:
+        prod = db.query(models.Product).filter(models.Product.id == it.product_id).first()
+        items_data.append({
+            "name": prod.name if prod else f"Артикул #{it.product_id}",
+            "pack_details": f"Стек от {prod.unitsPerCase} бр." if prod else "",
+            "ean": prod.barcode if prod else "N/A",
+            "quantity": it.quantity_cases,
+            "total_units": it.quantity_cases * (prod.unitsPerCase if prod else 24),
+            "unit_price": it.case_price,
+            "total_price": round(it.quantity_cases * it.case_price, 2)
+        })
+
+    order_dict = {
+        "id": order.id,
+        "storeName": order.storeName,
+        "invoiceEmail": order.invoiceEmail,
+        "address": order.address,
+        "eik": order.eik,
+        "paymentTerms": order.paymentTerms,
+        "total": order.total,
+    }
+
+    pdf_bytes = generate_delivery_note_pdf(order_dict, items_data)
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Ekspeditsionen_List_{order.id}.pdf"}
+    )
 
 class UpdateProductRequest(BaseModel):
     casePrice: Optional[float] = None
