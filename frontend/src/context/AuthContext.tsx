@@ -8,6 +8,8 @@ export interface User {
   role: "retailer" | "supplier" | "admin";
   company_name?: string;
   companyName?: string;
+  storeName?: string;
+  name?: string;
   eik?: string;
   mol?: string;
   address?: string;
@@ -18,7 +20,7 @@ interface AuthContextType {
   token: string | null;
   isAuthOpen: boolean;
   setIsAuthOpen: (open: boolean) => void;
-  setAuthSession: (user: User, token: string) => void;
+  setAuthSession: (user: User, token?: string) => void;
   login: (userDataOrEmail: User | string, roleOrCompany?: string) => void;
   logout: () => void;
 }
@@ -35,31 +37,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      const storedUser = localStorage.getItem(AUTH_STORAGE_KEY) || localStorage.getItem("b2b_user");
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY) || localStorage.getItem("b2b_user");
       const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.email) {
+          setUser(parsed);
+        }
       }
       if (storedToken) {
         setToken(storedToken);
       }
     } catch (e) {
-      console.error("Грешка при четене на сесията:", e);
+      console.error("Грешка при зареждане на сесията:", e);
     }
   }, []);
 
-  const setAuthSession = (userData: User, jwtToken: string) => {
+  const setAuthSession = (userData: User, jwtToken?: string) => {
     setUser(userData);
-    setToken(jwtToken);
+    if (jwtToken) setToken(jwtToken);
     try {
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
-      localStorage.setItem(TOKEN_STORAGE_KEY, jwtToken);
       localStorage.setItem("b2b_user", JSON.stringify(userData));
+      if (jwtToken) localStorage.setItem(TOKEN_STORAGE_KEY, jwtToken);
     } catch (e) {}
   };
 
   const login = (userDataOrEmail: User | string, roleOrCompany?: string) => {
     let finalUser: User;
+
     if (typeof userDataOrEmail === "object") {
       finalUser = userDataOrEmail;
     } else {
@@ -71,10 +77,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         company_name: `Търговски Обект (${email.split("@")[0].toUpperCase()})`,
         eik: "206894123",
         mol: "Управител",
-        address: "гр. София, бул. България 1"
+        address: "гр. София"
       };
     }
-    setAuthSession(finalUser, "demo_jwt_fallback_token");
+
+    setAuthSession(finalUser);
   };
 
   const logout = () => {
@@ -84,6 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(AUTH_STORAGE_KEY);
       localStorage.removeItem(TOKEN_STORAGE_KEY);
       localStorage.removeItem("b2b_user");
+      localStorage.removeItem("auth_user");
     } catch (e) {}
   };
 

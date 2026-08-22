@@ -5,7 +5,7 @@ import { Eye, EyeOff, X, Building2, Store, Lock, Mail, Building, MapPin, CheckCi
 import { useAuth, User } from "@/context/AuthContext";
 
 export default function AuthModal() {
-  const { isAuthOpen, setIsAuthOpen, login } = useAuth();
+  const { isAuthOpen, setIsAuthOpen, setAuthSession, login } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [role, setRole] = useState<"retailer" | "supplier">("retailer");
   const [showPassword, setShowPassword] = useState(false);
@@ -37,6 +37,17 @@ export default function AuthModal() {
     setError(null);
   };
 
+  const getApiBaseUrl = () => {
+    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+    if (typeof window !== 'undefined') {
+      const currentHost = window.location.hostname;
+      if (currentHost.includes('-3000.app.github.dev')) {
+        return `https://${currentHost.replace('-3000.app.github.dev', '-8000.app.github.dev')}`;
+      }
+    }
+    return "https://fairlike.onrender.com";
+  };
+
   const handleGoogleAuth = () => {
     setLoading(true);
     setTimeout(() => {
@@ -52,7 +63,7 @@ export default function AuthModal() {
       if (rememberMe) {
         localStorage.setItem("optom_remembered_email", demoUser.email);
       }
-      login(demoUser);
+      setAuthSession(demoUser);
       setLoading(false);
       handleClose();
     }, 600);
@@ -63,6 +74,8 @@ export default function AuthModal() {
     setLoading(true);
     setError(null);
 
+    const baseUrl = getApiBaseUrl();
+
     try {
       if (rememberMe) {
         localStorage.setItem("optom_remembered_email", email);
@@ -70,17 +83,48 @@ export default function AuthModal() {
         localStorage.removeItem("optom_remembered_email");
       }
 
-      const userData: User = {
-        email,
-        company_name: companyName || (role === "supplier" ? "Фабрика / Дистрибутор" : "Търговски Обект"),
-        role,
-        eik: eik || "206894123",
-        mol: mol || "Управител",
-        address: address || "гр. София"
-      };
-      
-      login(userData);
-      handleClose();
+      if (mode === "register") {
+        const payload = {
+          email: email.trim().toLowerCase(),
+          password,
+          company_name: companyName.trim() || (role === "supplier" ? "Фабрика / Дистрибутор" : "Търговски Обект"),
+          eik: eik.trim() || "206894123",
+          mol: mol.trim() || "Управител",
+          address: address.trim() || "гр. София",
+          role
+        };
+
+        const res = await fetch(`${baseUrl}/api/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || "Грешка при регистрация");
+        }
+
+        setAuthSession(data.user, data.access_token);
+        handleClose();
+      } else {
+        const res = await fetch(`${baseUrl}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            email: email.trim().toLowerCase(), 
+            password 
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || "Грешен имейл адрес или парола");
+        }
+
+        setAuthSession(data.user, data.access_token);
+        handleClose();
+      }
     } catch (err: any) {
       setError(err.message || "Възникна грешка при автентикацията.");
     } finally {
@@ -108,7 +152,7 @@ export default function AuthModal() {
           </p>
         </div>
 
-        {/* Избор на роля (Винаги видим за лесно превключване) */}
+        {/* Избор на роля */}
         <div className="mb-5">
           <label className="block text-[11px] font-bold text-slate-500 mb-1.5 text-center">Изберете типа на вашия бизнес:</label>
           <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl border border-slate-200">
