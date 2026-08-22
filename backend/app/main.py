@@ -17,7 +17,7 @@ import resend
 import models
 from database import engine, get_db, SessionLocal
 from routers.invoices import router as invoices_router
-from routers.auth import router as auth_router, get_current_user, get_optional_user
+from routers.auth import router as auth_router
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -117,8 +117,6 @@ class ProductSchema(BaseModel):
     casePrice: float
     rrpPrice: float
     imageUrl: str
-    inStock: Optional[bool] = True
-    supplier_id: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -127,7 +125,7 @@ class ProductCreate(BaseModel):
     name: str
     category: str
     barcode: str
-    supplierName: Optional[str] = None
+    supplierName: str
     supplierMinimum: Optional[float] = 50.0
     unitsPerCase: int
     casePrice: float
@@ -154,89 +152,94 @@ class CreateOrderRequest(BaseModel):
 class UpdateOrderStatusRequest(BaseModel):
     status: str
 
-def generate_order_invoice_pdf(order: models.Order, items_data: list) -> bytes:
-    issue_date = date.today()
-    payment_term = order.paymentTerms or "net60"
-    due_date = issue_date + timedelta(days=60 if payment_term == "net60" else (30 if payment_term == "net30" else 0))
-    payment_label = "Net 60 дни" if payment_term == "net60" else ("Net 30 дни" if payment_term == "net30" else "Веднага (-2% отстъпка)")
+def generate_order_invoice_pdf(order_dict: dict, items_data: list) -> bytes:
+    try:
+        issue_date = date.today()
+        payment_term = order_dict.get("paymentTerms", "net60")
+        due_date = issue_date + timedelta(days=60 if payment_term == "net60" else (30 if payment_term == "net30" else 0))
+        payment_label = "Net 60 дни" if payment_term == "net60" else ("Net 30 дни" if payment_term == "net30" else "Веднага (-2%)")
 
-    context = {
-        "doc_type_label": "B2B Фактура / Проформа",
-        "invoice_number": f"1000{order.id}",
-        "issue_date": issue_date.strftime("%d.%m.%Y"),
-        "tax_event_date": issue_date.strftime("%d.%m.%Y"),
-        "payment_terms_label": payment_label,
-        "due_date": due_date.strftime("%d.%m.%Y"),
-        "supplier": {
-            "name": order.supplier_name or "OPTOM.BG / Официален Дистрибутор",
-            "eik": "206894123",
-            "vat_number": "BG206894123",
-            "address": "гр. София, бул. Цариградско шосе 115",
-            "mol": "Димитър Петров",
-            "iban": "BG80UNCR70001523984512",
-            "bank_name": "УниКредит Булбанк"
-        },
-        "buyer": {
-            "name": order.storeName,
-            "eik": order.eik or "Не е посочен",
-            "vat_number": f"BG{order.eik}" if order.eik else "Нерегистриран по ЗДДС",
-            "address": order.address,
-            "mol": order.storeName,
-            "email": order.invoiceEmail
-        },
-        "items": items_data,
-        "subtotal": order.subtotal,
-        "discount_percent": 2.0 if payment_term == "immediate" else 0.0,
-        "discount_amount": 0.0,
-        "taxable_base": order.subtotal,
-        "vat_rate": 20.0,
-        "vat_amount": order.vat,
-        "total_due": order.total
-    }
+        context = {
+            "doc_type_label": "B2B Фактура / Проформа",
+            "invoice_number": f"1000{order_dict['id']}",
+            "issue_date": issue_date.strftime("%d.%m.%Y"),
+            "tax_event_date": issue_date.strftime("%d.%m.%Y"),
+            "payment_terms_label": payment_label,
+            "due_date": due_date.strftime("%d.%m.%Y"),
+            "supplier": {
+                "name": "OPTOM.BG / Официален Дистрибутор",
+                "eik": "206894123",
+                "vat_number": "BG206894123",
+                "address": "гр. София, бул. Цариградско шосе 115",
+                "mol": "Димитър Петров",
+                "iban": "BG80UNCR70001523984512",
+                "bank_name": "УниКредит Булбанк"
+            },
+            "buyer": {
+                "name": order_dict["storeName"],
+                "eik": order_dict.get("eik") or "Не е посочен",
+                "vat_number": f"BG{order_dict['eik']}" if order_dict.get("eik") else "Нерегистриран по ЗДДС",
+                "address": order_dict["address"],
+                "mol": order_dict["storeName"],
+                "email": order_dict["invoiceEmail"]
+            },
+            "items": items_data,
+            "subtotal": order_dict["subtotal"],
+            "discount_percent": 0.0,
+            "discount_amount": 0.0,
+            "taxable_base": order_dict["subtotal"],
+            "vat_rate": 20.0,
+            "vat_amount": order_dict["vat"],
+            "total_due": order_dict["total"]
+        }
 
-    template = jinja_env.get_template("invoice_template.html")
-    rendered_html = template.render(**context)
-    pdf_io = io.BytesIO()
-    HTML(string=rendered_html).write_pdf(pdf_io)
-    return pdf_io.getvalue()
+        template = jinja_env.get_template("invoice_template.html")
+        rendered_html = template.render(**context)
+        pdf_io = io.BytesIO()
+        HTML(string=rendered_html).write_pdf(pdf_io)
+        return pdf_io.getvalue()
+    except Exception as e:
+        print(f"⚠️ Грешка при PDF: {e}")
+        return b""
 
-def send_order_confirmation_email(order_dict: dict, items_data: list):
+def trigger_direct_email(order_dict: dict, items_data: list):
     active_key = os.getenv("RESEND_API_KEY", "")
     if not active_key:
         return
     resend.api_key = active_key
+
+    items_html = "".join([
+        f"<tr><td style='padding: 8px; border-bottom: 1px solid #e2e8f0;'><strong>{it.get('name', 'Стек')}</strong></td>"
+        f"<td style='padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center;'>{it.get('quantity', 1)} бр.</td>"
+        f"<td style='padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: monospace;'>{it.get('total_price', 0):.2f} лв.</td></tr>"
+        for it in items_data
+    ])
+
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; color: #0f172a; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 900;">OPTOM<span style="color: #059669;">.BG</span></h1>
+        <h2>Здравейте, {order_dict['storeName']}!</h2>
+        <p>Вашата поръчка с номер <strong>#{order_dict['id']}</strong> беше приета успешно.</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">{items_html}</table>
+        <p style="font-size: 16px; font-weight: bold;">Общо с ДДС: {order_dict['total']:.2f} лв.</p>
+    </div>
+    """
+
+    email_params = {
+        "from": "OPTOM.BG <onboarding@resend.dev>",
+        "to": [order_dict["invoiceEmail"]],
+        "subject": f"Потвърждение за зареждане #{order_dict['id']} - OPTOM.BG",
+        "html": html_content
+    }
+
+    pdf_bytes = generate_order_invoice_pdf(order_dict, items_data)
+    if pdf_bytes and len(pdf_bytes) > 100:
+        email_params["attachments"] = [{
+            "filename": f"Faktura_{order_dict['id']}.pdf",
+            "content": list(pdf_bytes)
+        }]
+
     try:
-        class DummyOrder:
-            pass
-        dummy = DummyOrder()
-        for k, v in order_dict.items():
-            setattr(dummy, k, v)
-        pdf_bytes = generate_order_invoice_pdf(dummy, items_data)
-
-        items_html = "".join([
-            f"<tr><td style='padding: 8px; border-bottom: 1px solid #e2e8f0;'><strong>{it.get('name', 'Стек')}</strong></td>"
-            f"<td style='padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center;'>{it.get('quantity', 1)} бр.</td>"
-            f"<td style='padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: monospace;'>{it.get('total_price', 0):.2f} лв.</td></tr>"
-            for it in items_data
-        ])
-
-        html_content = f"""
-        <div style="font-family: Arial, sans-serif; color: #0f172a; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px;">
-            <h2>Потвърждение за заявка #{order_dict['id']} ({order_dict.get('supplier_name', 'B2B')})</h2>
-            <p>Обект: <strong>{order_dict['storeName']}</strong></p>
-            <p>Адрес за доставка: {order_dict['address']}</p>
-            <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">{items_html}</table>
-            <p style="font-size: 16px; font-weight: bold;">Общо с ДДС: {order_dict['total']:.2f} лв.</p>
-        </div>
-        """
-
-        email_params = {
-            "from": "OPTOM.BG <onboarding@resend.dev>",
-            "to": [order_dict["invoiceEmail"]],
-            "subject": f"Потвърждение за зареждане #{order_dict['id']} - OPTOM.BG",
-            "html": html_content,
-            "attachments": [{"filename": f"Faktura_{order_dict['id']}.pdf", "content": list(pdf_bytes)}] if pdf_bytes else []
-        }
         resend.Emails.send(email_params)
     except Exception as e:
         print(f"Resend error: {e}")
@@ -258,30 +261,22 @@ def search_products(q: str = "", db: Session = Depends(get_db)):
     ).limit(10).all()
 
 @app.get("/api/products", response_model=List[ProductSchema])
-def get_products(supplier_only: bool = False, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
-    query = db.query(models.Product)
-    if supplier_only and current_user and current_user.role == "supplier":
-        query = query.filter((models.Product.supplier_id == current_user.id) | (models.Product.supplierName == current_user.company_name))
-    return query.order_by(models.Product.name.asc()).all()
+def get_products(db: Session = Depends(get_db)):
+    return db.query(models.Product).order_by(models.Product.name.asc()).all()
 
 @app.post("/api/products", response_model=ProductSchema)
-def add_product(item: ProductCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if current_user.role != "supplier":
-        raise HTTPException(status_code=403, detail="Само производители/доставчици могат да добавят артикули")
-
+def add_product(item: ProductCreate, db: Session = Depends(get_db)):
     new_product = models.Product(
         id=str(uuid.uuid4())[:8],
         name=item.name,
         category=item.category,
         barcode=item.barcode,
-        supplierName=current_user.company_name or item.supplierName or "Официален Дистрибутор",
+        supplierName=item.supplierName,
         supplierMinimum=item.supplierMinimum or 50.0,
         unitsPerCase=item.unitsPerCase,
         casePrice=item.casePrice,
         rrpPrice=item.rrpPrice,
         imageUrl=item.imageUrl or "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80",
-        inStock=True,
-        supplier_id=current_user.id
     )
     db.add(new_product)
     db.commit()
@@ -289,14 +284,7 @@ def add_product(item: ProductCreate, current_user: models.User = Depends(get_cur
     return new_product
 
 @app.post("/api/products/import")
-async def import_products(
-    file: UploadFile = File(...),
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    if current_user.role != "supplier":
-        raise HTTPException(status_code=403, detail="Само производители могат да импортират ценови листи")
-
+async def import_products(file: UploadFile = File(...), db: Session = Depends(get_db)):
     contents = await file.read()
     try:
         if file.filename.endswith(".csv"):
@@ -326,13 +314,12 @@ async def import_products(
                 name=str(row.get("name", "Артикул")).strip(),
                 category=str(row.get("category", "Храни")).strip(),
                 barcode=bcode,
-                supplierName=current_user.company_name,
+                supplierName=str(row.get("supplier_name", "Официален Дистрибутор")).strip(),
                 supplierMinimum=float(row.get("supplier_minimum", 50.0)),
                 unitsPerCase=int(row.get("units_per_case", 24)),
                 casePrice=float(row.get("case_price", 20.0)),
                 rrpPrice=float(row.get("rrp_price", 25.0)),
-                inStock=True,
-                supplier_id=current_user.id
+                imageUrl=str(row.get("image_url", "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80")).strip()
             )
             db.add(new_p)
             imported += 1
@@ -340,98 +327,67 @@ async def import_products(
     return {"status": "success", "imported": imported, "updated": updated}
 
 @app.get("/api/orders")
-def get_orders(current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+def get_orders(email: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(models.Order)
-    if current_user:
-        if current_user.role == "retailer":
-            query = query.filter((models.Order.user_id == current_user.id) | (models.Order.invoiceEmail == current_user.email))
-        elif current_user.role == "supplier":
-            query = query.filter(models.Order.supplier_name == current_user.company_name)
+    if email:
+        query = query.filter(models.Order.invoiceEmail == email)
     return query.order_by(models.Order.created_at.desc()).all()
 
 @app.post("/api/orders")
-def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
-    if current_user and order_in.paymentTerms in ["net30", "net60"]:
-        limit = current_user.credit_limit or 3000.0
-        used = current_user.used_credit or 0.0
-        if (used + order_in.total) > limit:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Надвишен B2B кредитен лимит! Наличен: {(limit - used):.2f} лв."
-            )
-        current_user.used_credit = used + order_in.total
+def create_order(order_in: CreateOrderRequest, db: Session = Depends(get_db)):
+    order_id = str(uuid.uuid4())[:8].upper()
+    db_order = models.Order(
+        id=order_id,
+        storeName=order_in.storeName,
+        invoiceEmail=order_in.invoiceEmail,
+        address=order_in.address,
+        eik=order_in.eik,
+        paymentTerms=order_in.paymentTerms,
+        subtotal=order_in.subtotal,
+        vat=order_in.vat,
+        total=order_in.total,
+        estimatedProfit=order_in.estimatedProfit,
+        status="pending_delivery"
+    )
+    db.add(db_order)
 
-    vendor_buckets = {}
+    items_data = []
     for it in order_in.items:
-        prod = db.query(models.Product).filter(models.Product.id == it.productId).first()
-        supp_name = prod.supplierName if prod else "Официален Дистрибутор"
-        if supp_name not in vendor_buckets:
-            vendor_buckets[supp_name] = []
-        vendor_buckets[supp_name].append((it, prod))
-
-    created_ids = []
-
-    for supp_name, bucket in vendor_buckets.items():
-        sub = sum(it.quantityCases * it.casePrice for it, _ in bucket)
-        disc = (sub * 0.02) if order_in.paymentTerms == "immediate" else 0.0
-        base = sub - disc
-        vat = base * 0.20
-        total = base + vat
-
-        order_id = str(uuid.uuid4())[:8].upper()
-        db_order = models.Order(
-            id=order_id,
-            storeName=order_in.storeName,
-            invoiceEmail=order_in.invoiceEmail,
-            address=order_in.address,
-            eik=order_in.eik,
-            paymentTerms=order_in.paymentTerms,
-            subtotal=round(base, 2),
-            vat=round(vat, 2),
-            total=round(total, 2),
-            estimatedProfit=order_in.estimatedProfit,
-            status="pending_delivery",
-            user_id=current_user.id if current_user else None,
-            supplier_name=supp_name
+        db_item = models.OrderItem(
+            order_id=order_id,
+            product_id=it.productId,
+            quantity_cases=it.quantityCases,
+            case_price=it.casePrice
         )
-        db.add(db_order)
-
-        items_data = []
-        for it, prod in bucket:
-            db_item = models.OrderItem(
-                order_id=order_id,
-                product_id=it.productId,
-                quantity_cases=it.quantityCases,
-                case_price=it.casePrice
-            )
-            db.add(db_item)
-            items_data.append({
-                "name": prod.name if prod else f"Артикул #{it.productId}",
-                "pack_details": f"Стек от {prod.unitsPerCase} бр." if prod else "",
-                "ean": prod.barcode if prod else "N/A",
-                "quantity": it.quantityCases,
-                "unit": "стека",
-                "unit_price": it.casePrice,
-                "total_price": round(it.quantityCases * it.casePrice, 2)
-            })
-
-        created_ids.append(order_id)
-        order_dict = {
-            "id": db_order.id,
-            "storeName": db_order.storeName,
-            "invoiceEmail": db_order.invoiceEmail,
-            "address": db_order.address,
-            "eik": db_order.eik,
-            "paymentTerms": db_order.paymentTerms,
-            "subtotal": db_order.subtotal,
-            "vat": db_order.vat,
-            "total": db_order.total,
-            "supplier_name": supp_name
-        }
-        background_tasks.add_task(send_order_confirmation_email, order_dict, items_data)
+        db.add(db_item)
+        prod = db.query(models.Product).filter(models.Product.id == it.productId).first()
+        items_data.append({
+            "name": prod.name if prod else f"Артикул #{it.productId}",
+            "pack_details": f"Стек от {prod.unitsPerCase} бр." if prod else "",
+            "ean": prod.barcode if prod else "N/A",
+            "quantity": it.quantityCases,
+            "unit": "стека",
+            "unit_price": it.casePrice,
+            "total_price": round(it.quantityCases * it.casePrice, 2)
+        })
 
     db.commit()
-    return {"status": "success", "orderId": created_ids[0], "allOrderIds": created_ids}
+    db.refresh(db_order)
+
+    order_dict = {
+        "id": db_order.id,
+        "storeName": db_order.storeName,
+        "invoiceEmail": db_order.invoiceEmail,
+        "address": db_order.address,
+        "eik": db_order.eik,
+        "paymentTerms": db_order.paymentTerms,
+        "subtotal": db_order.subtotal,
+        "vat": db_order.vat,
+        "total": db_order.total,
+    }
+
+    trigger_direct_email(order_dict, items_data)
+    return {"status": "success", "orderId": order_id}
 
 @app.get("/api/orders/{order_id}/invoice")
 def download_order_invoice(order_id: str, db: Session = Depends(get_db)):
@@ -453,7 +409,19 @@ def download_order_invoice(order_id: str, db: Session = Depends(get_db)):
             "total_price": round(it.quantity_cases * it.case_price, 2)
         })
 
-    pdf_bytes = generate_order_invoice_pdf(order, items_data)
+    order_dict = {
+        "id": order.id,
+        "storeName": order.storeName,
+        "invoiceEmail": order.invoiceEmail,
+        "address": order.address,
+        "eik": order.eik,
+        "paymentTerms": order.paymentTerms,
+        "subtotal": order.subtotal,
+        "vat": order.vat,
+        "total": order.total,
+    }
+
+    pdf_bytes = generate_order_invoice_pdf(order_dict, items_data)
     return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Faktura_{order.id}.pdf"})
 
 class UpdateProductRequest(BaseModel):
@@ -463,19 +431,15 @@ class UpdateProductRequest(BaseModel):
     supplierMinimum: Optional[float] = None
 
 @app.patch("/api/products/{product_id}")
-def update_product(product_id: str, payload: UpdateProductRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_product(product_id: str, payload: UpdateProductRequest, db: Session = Depends(get_db)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Продуктът не е намерен")
-    if product.supplier_id and product.supplier_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Нямате права да редактирате артикул на друг производител")
 
     if payload.casePrice is not None:
         product.casePrice = payload.casePrice
     if payload.rrpPrice is not None:
         product.rrpPrice = payload.rrpPrice
-    if payload.inStock is not None:
-        product.inStock = payload.inStock
     if payload.supplierMinimum is not None:
         product.supplierMinimum = payload.supplierMinimum
 
@@ -484,13 +448,10 @@ def update_product(product_id: str, payload: UpdateProductRequest, current_user:
     return {"status": "success", "product": product}
 
 @app.delete("/api/products/{product_id}")
-def delete_product(product_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_product(product_id: str, db: Session = Depends(get_db)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Продуктът не е намерен")
-    if product.supplier_id and product.supplier_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Нямате права да изтриете артикул на друг производител")
-
     db.delete(product)
     db.commit()
-    return {"status": "success", "message": f"Продукт #{product_id} беше успешно изтрит"}
+    return {"status": "success", "message": f"Продукт #{product_id} беше изтрит"}
