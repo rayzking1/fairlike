@@ -1,30 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { 
   ShoppingBag, 
-  Truck, 
-  ShieldCheck, 
-  CheckCircle2, 
-  Plus, 
-  Minus, 
   ArrowRight, 
   Package, 
-  Store, 
   Check, 
-  Building2, 
   Lock, 
   Eye, 
-  SlidersHorizontal,
-  Award,
-  Sparkles,
   ArrowUpRight,
-  Clock,
-  TrendingUp,
-  Percent,
-  Layers,
-  FileText
+  Plus,
+  Minus
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
@@ -74,13 +61,6 @@ const FEATURED_BRANDS = [
   },
 ];
 
-const RECENT_PURCHASES = [
-  { store: "Супермаркет „Надежда 4“", city: "гр. София", item: "10 стека Coca-Cola 330ml", time: "преди 2 мин." },
-  { store: "Минимаркет „Детелина“", city: "гр. Пловдив", item: "6 стека Chio Паприка 140g", time: "преди 5 мин." },
-  { store: "Денонощен магазин „Авангард“", city: "гр. Варна", item: "8 стека Red Bull 250ml", time: "преди 8 мин." },
-  { store: "Хранителни стоки „Централ“", city: "гр. Бургас", item: "15 стека Milka Alpine Milk", time: "преди 12 мин." },
-];
-
 export default function HomePage() {
   const { items: cartItems, addToCart, setIsCartOpen } = useCart();
   const { user, setIsAuthOpen } = useAuth();
@@ -93,33 +73,16 @@ export default function HomePage() {
   const [filterType, setFilterType] = useState<"all" | "local" | "low_min" | "top_brand">("all");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
-  const [showStickyFilters, setShowStickyFilters] = useState(false);
+
+  // Скрол динамика за плавно свиване и изчезване на Hero секцията
+  const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
     const handleScroll = () => {
-      setShowStickyFilters(window.scrollY > 380);
+      setScrollY(window.scrollY);
     };
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const [toastIndex, setToastIndex] = useState(0);
-  const [showToast, setShowToast] = useState(false);
-
-  useEffect(() => {
-    const initialDelay = setTimeout(() => setShowToast(true), 3500);
-    const interval = setInterval(() => {
-      setShowToast(false);
-      setTimeout(() => {
-        setToastIndex((prev) => (prev + 1) % RECENT_PURCHASES.length);
-        setShowToast(true);
-      }, 1200);
-    }, 12000);
-
-    return () => {
-      clearTimeout(initialDelay);
-      clearInterval(interval);
-    };
   }, []);
 
   const getApiBaseUrl = () => {
@@ -208,33 +171,23 @@ export default function HomePage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#FAFAFA] text-neutral-900 antialiased selection:bg-neutral-900 selection:text-white">
-      
-      {/* 1. MINIMAL TOP TICKER */}
-      <div className="bg-neutral-950 text-neutral-300 text-[11px] font-medium py-2 px-4 border-b border-neutral-800 tracking-tight">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Директна B2B дистрибуция за магазини и заведения</span>
-          </div>
-          <div className="hidden sm:flex items-center gap-4 text-neutral-400 text-[10px] tracking-wider uppercase">
-            <span>Net 60 дни отсрочка</span>
-            <span>&bull;</span>
-            <span>Безплатна логистика над 300 лв.</span>
-          </div>
-        </div>
-      </div>
+  // Изчисляване на плавното свиване на hero секцията (от 0 до 400px скрол)
+  const heroOpacity = Math.max(0.15, 1 - scrollY / 450);
+  const heroScale = Math.max(0.96, 1 - scrollY / 3000);
+  const heroTranslate = Math.min(60, scrollY * 0.15);
 
-      {/* 2. НАВИГАЦИЯ */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-18 flex items-center justify-between gap-6">
+  return (
+    <div className="min-h-screen bg-[#FDFDFD] text-neutral-900 antialiased selection:bg-neutral-900 selection:text-white">
+      
+      {/* 1. НАВИГАЦИЯ */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-neutral-200/60 transition-all">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between gap-6">
           
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-neutral-950 flex items-center justify-center text-white font-black text-sm tracking-tighter">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-md bg-neutral-950 flex items-center justify-center text-white font-black text-xs">
               O
             </div>
-            <span className="text-xl font-black tracking-tight text-neutral-950">
+            <span className="text-lg font-black tracking-tight text-neutral-950">
               OPTOM<span className="text-neutral-400">.BG</span>
             </span>
           </Link>
@@ -249,12 +202,12 @@ export default function HomePage() {
             {!isSupplier && (
               <button
                 onClick={handleCartClick}
-                className="relative flex items-center gap-2 px-3.5 py-2 bg-neutral-950 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                className="relative flex items-center gap-2 px-3 py-1.5 bg-neutral-950 hover:bg-neutral-850 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer hover:scale-[1.02]"
               >
                 {user ? <ShoppingBag className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-neutral-400" />}
                 <span className="hidden sm:inline">Заявка</span>
                 {user && totalCartCases > 0 && (
-                  <span className="w-4.5 h-4.5 rounded-full bg-white text-neutral-950 text-[10px] font-black flex items-center justify-center">
+                  <span className="w-4 h-4 rounded-full bg-white text-neutral-950 text-[10px] font-black flex items-center justify-center">
                     {totalCartCases}
                   </span>
                 )}
@@ -264,70 +217,21 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* 3. STICKY FILTER BAR */}
-      {showStickyFilters && (
-        <div className="sticky top-18 z-30 bg-white/95 backdrop-blur-md border-b border-neutral-200/90 shadow-xs animate-in slide-in-from-top-1 duration-200 py-2.5">
-          <div className="max-w-7xl mx-auto px-4 sm:px-8 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setFilterType("all")}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 border cursor-pointer ${
-                  filterType === "all"
-                    ? "bg-neutral-950 text-white border-neutral-950"
-                    : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
-                }`}
-              >
-                Всички оферти
-              </button>
-
-              <button
-                onClick={() => setFilterType("local")}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 border cursor-pointer ${
-                  filterType === "local"
-                    ? "bg-neutral-950 text-white border-neutral-950"
-                    : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
-                }`}
-              >
-                Български производители
-              </button>
-
-              <button
-                onClick={() => setFilterType("low_min")}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 border cursor-pointer ${
-                  filterType === "low_min"
-                    ? "bg-neutral-950 text-white border-neutral-950"
-                    : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
-                }`}
-              >
-                Нисък минимум (MOQ ≤ 50 лв.)
-              </button>
-
-              <button
-                onClick={() => setFilterType("top_brand")}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 border cursor-pointer ${
-                  filterType === "top_brand"
-                    ? "bg-neutral-950 text-white border-neutral-950"
-                    : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
-                }`}
-              >
-                Топ Марки
-              </button>
-            </div>
-
-            <span className="text-[11px] text-neutral-400 font-mono hidden md:inline">
-              {filteredProducts.length} артикула
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* 4. HERO SECTION - ELEGANT & MONOCHROME */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-10 pb-6">
-        <div className="rounded-3xl bg-neutral-950 text-white p-8 sm:p-14 relative overflow-hidden border border-neutral-900 shadow-sm">
+      {/* 2. HERO СЕКЦИЯ С ПЛАВНО СВИВАНЕ И FADE-OUT ПРИ СКРОЛ */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-4">
+        <div 
+          style={{
+            opacity: heroOpacity,
+            transform: `scale(${heroScale}) translateY(${heroTranslate}px)`,
+            transformOrigin: "top center",
+            transition: "opacity 0.1s ease-out, transform 0.1s ease-out"
+          }}
+          className="rounded-3xl bg-neutral-950 text-white p-8 sm:p-14 relative overflow-hidden border border-neutral-900 shadow-sm"
+        >
           <div className="max-w-2xl relative z-10 space-y-6 text-left">
             
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-300 font-medium tracking-tight">
-              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400"></span>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-300 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 animate-pulse"></span>
               Faire-модел за търговия на едро в България
             </div>
 
@@ -344,7 +248,7 @@ export default function HomePage() {
                 onClick={() => {
                   document.getElementById("catalog-section")?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className="px-6 py-3 bg-white hover:bg-neutral-100 text-neutral-950 rounded-xl text-xs font-bold tracking-tight shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+                className="px-6 py-3 bg-white hover:bg-neutral-100 text-neutral-950 rounded-xl text-xs font-bold tracking-tight shadow-sm flex items-center gap-2 transition-all cursor-pointer hover:translate-x-0.5"
               >
                 Към каталога на едро <ArrowRight className="w-3.5 h-3.5" />
               </button>
@@ -360,18 +264,17 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Micro Conversion Badges */}
             <div className="pt-4 border-t border-neutral-900 grid grid-cols-3 gap-4 text-left">
               <div>
-                <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Условия</p>
+                <p className="text-[10px] text-neutral-500 uppercase font-mono">Условия</p>
                 <p className="text-xs font-bold text-neutral-200 mt-0.5">Net 60 Отсрочка</p>
               </div>
               <div>
-                <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Логистика</p>
+                <p className="text-[10px] text-neutral-500 uppercase font-mono">Логистика</p>
                 <p className="text-xs font-bold text-neutral-200 mt-0.5">24–48ч Доставка</p>
               </div>
               <div>
-                <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">Поръчка</p>
+                <p className="text-[10px] text-neutral-500 uppercase font-mono">Поръчка</p>
                 <p className="text-xs font-bold text-neutral-200 mt-0.5">От 50 лв. MOQ</p>
               </div>
             </div>
@@ -379,9 +282,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 5. ИСТОРИЯТА И ИДЕЯТА ЗАД OPTOM.BG (BRAND STORY) */}
+      {/* 3. ИСТОРИЯТА И ИДЕЯТА ЗАД OPTOM.BG */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white border border-neutral-200 rounded-3xl p-6 sm:p-10 shadow-xs">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white border border-neutral-200/80 rounded-3xl p-6 sm:p-10 shadow-xs hover:border-neutral-300 transition-colors">
           
           <div className="md:col-span-1 space-y-3">
             <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 font-bold">Нашата Мисия</span>
@@ -394,8 +297,8 @@ export default function HomePage() {
           </div>
 
           <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="space-y-2 p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
-              <div className="w-8 h-8 rounded-lg bg-neutral-950 text-white flex items-center justify-center font-black text-xs">
+            <div className="space-y-2 p-5 rounded-2xl bg-[#FAFAFA] border border-neutral-100">
+              <div className="w-7 h-7 rounded-lg bg-neutral-950 text-white flex items-center justify-center font-black text-xs">
                 01
               </div>
               <h3 className="text-xs font-bold text-neutral-950">Директен достъп без прекупвачи</h3>
@@ -404,8 +307,8 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="space-y-2 p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
-              <div className="w-8 h-8 rounded-lg bg-neutral-950 text-white flex items-center justify-center font-black text-xs">
+            <div className="space-y-2 p-5 rounded-2xl bg-[#FAFAFA] border border-neutral-100">
+              <div className="w-7 h-7 rounded-lg bg-neutral-950 text-white flex items-center justify-center font-black text-xs">
                 02
               </div>
               <h3 className="text-xs font-bold text-neutral-950">Гъвкавост и ликвидни стимули</h3>
@@ -417,7 +320,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. FAIRE STOREFRONTS (БРАНДОВЕ) */}
+      {/* 4. FAIRE STOREFRONTS (БРАНДОВЕ) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
         <div className="flex items-end justify-between mb-6">
           <div>
@@ -426,7 +329,7 @@ export default function HomePage() {
               Директни Фабрики & Марки
             </h2>
           </div>
-          <span className="text-xs text-neutral-400 hidden sm:inline">Изберете производител за каталог</span>
+          <span className="text-xs text-neutral-400 hidden sm:inline">Изберете производител за пълен ценоразпис</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -434,7 +337,7 @@ export default function HomePage() {
             <Link
               key={brand.name}
               href={`/brand/${encodeURIComponent(brand.name)}`}
-              className="group bg-white rounded-2xl border border-neutral-200 hover:border-neutral-900 p-4 transition-all duration-200 shadow-xs flex flex-col justify-between"
+              className="group bg-white rounded-2xl border border-neutral-200/80 hover:border-neutral-950 p-4 transition-all duration-300 shadow-xs flex flex-col justify-between hover:-translate-y-1 hover:shadow-md"
             >
               <div>
                 <div className="relative aspect-16/10 rounded-xl overflow-hidden bg-neutral-100 mb-3 border border-neutral-100">
@@ -470,7 +373,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 7. КАТЕГОРИИ */}
+      {/* 5. КАТЕГОРИИ */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           {CATEGORY_TILES.map((cat) => {
@@ -482,10 +385,10 @@ export default function HomePage() {
                   setSelectedCategory(isSelected ? "all" : cat.id);
                   document.getElementById("catalog-section")?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className={`cursor-pointer rounded-2xl bg-white border transition-all p-3.5 flex items-center gap-3 ${
+                className={`cursor-pointer rounded-2xl bg-white border transition-all duration-200 p-3.5 flex items-center gap-3 ${
                   isSelected 
                     ? "border-neutral-950 ring-1 ring-neutral-950 shadow-xs" 
-                    : "border-neutral-200 hover:border-neutral-300 shadow-xs"
+                    : "border-neutral-200/80 hover:border-neutral-400 shadow-xs hover:-translate-y-0.5"
                 }`}
               >
                 <div className="w-11 h-11 rounded-xl overflow-hidden bg-neutral-100 shrink-0">
@@ -501,9 +404,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 8. КАТАЛОГ СТЕКОВЕ */}
+      {/* 6. КАТАЛОГ СТЕКОВЕ */}
       <section id="catalog-section" className="max-w-7xl mx-auto px-4 sm:px-8 py-10">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 border-b border-neutral-200 pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 border-b border-neutral-200/80 pb-4">
           <div>
             <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 font-bold">Налични оферти на едро</span>
             <h2 className="text-xl font-black text-neutral-950 tracking-tight mt-0.5">
@@ -536,7 +439,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {filteredProducts.map((p) => {
               const qty = quantities[p.id] || 1;
-              const { effectivePrice, discountPercent } = getTieredPrice(p, qty);
+              const { effectivePrice } = getTieredPrice(p, qty);
               const retailTotalPerCase = p.rrpPrice * p.unitsPerCase;
               const profitPerCase = Math.max(0, retailTotalPerCase - effectivePrice);
               const marginPercent = retailTotalPerCase > 0 ? Math.round((profitPerCase / retailTotalPerCase) * 100) : 0;
@@ -545,7 +448,7 @@ export default function HomePage() {
               return (
                 <div 
                   key={p.id}
-                  className="group bg-white rounded-2xl border border-neutral-200 hover:border-neutral-900 transition-all duration-200 shadow-xs flex flex-col justify-between overflow-hidden"
+                  className="group bg-white rounded-2xl border border-neutral-200/80 hover:border-neutral-950 transition-all duration-300 shadow-xs flex flex-col justify-between overflow-hidden hover:-translate-y-1 hover:shadow-md"
                 >
                   <div>
                     {/* Снимка */}
@@ -692,24 +595,6 @@ export default function HomePage() {
           &copy; 2026 OPTOM.BG. Всички права запазени.
         </div>
       </footer>
-
-      {/* SOCIAL PROOF TOAST */}
-      {showToast && (
-        <div className="fixed bottom-6 left-6 z-50 bg-white border border-neutral-200 rounded-2xl p-3 shadow-xl max-w-xs flex items-center gap-3 animate-in slide-in-from-bottom duration-300">
-          <div className="w-8 h-8 rounded-lg bg-neutral-100 text-neutral-900 flex items-center justify-center shrink-0">
-            <Store className="w-4 h-4" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold text-neutral-950 truncate">
-              {RECENT_PURCHASES[toastIndex].store}
-            </p>
-            <p className="text-[10px] text-neutral-500 truncate">
-              Зареди {RECENT_PURCHASES[toastIndex].item}
-            </p>
-            <span className="text-[9px] text-neutral-400 font-mono">{RECENT_PURCHASES[toastIndex].city} &bull; {RECENT_PURCHASES[toastIndex].time}</span>
-          </div>
-        </div>
-      )}
 
       {!isSupplier && <CartDrawer />}
     </div>
