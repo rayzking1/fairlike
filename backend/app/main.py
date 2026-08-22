@@ -1,4 +1,4 @@
-from sqlalchemy import func
+from sqlalchemy import func, text
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -21,82 +21,107 @@ from routers.auth import router as auth_router
 
 models.Base.metadata.create_all(bind=engine)
 
+# Автоматично добавяне на липсващите колони в съществуваща PostgreSQL/SQLite база данни
+def run_auto_migrations():
+    with engine.connect() as conn:
+        columns_to_add = [
+            ("in_stock", "BOOLEAN DEFAULT TRUE"),
+            ("has_tiered_discount", "BOOLEAN DEFAULT TRUE"),
+            ("tier1_qty", "INTEGER DEFAULT 5"),
+            ("tier1_discount", "FLOAT DEFAULT 5.0"),
+            ("tier2_qty", "INTEGER DEFAULT 10"),
+            ("tier2_discount", "FLOAT DEFAULT 10.0"),
+            ("supplier_id", "VARCHAR"),
+        ]
+        for col_name, col_type in columns_to_add:
+            try:
+                conn.execute(text(f"ALTER TABLE products ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
+                conn.commit()
+            except Exception:
+                pass
+
+run_auto_migrations()
+
 def seed_initial_products():
     db = SessionLocal()
-    if db.query(models.Product).count() == 0:
-        initial_products = [
-            models.Product(
-                id="1",
-                name="Шоколад Milka Alpine Milk 100g",
-                category="Шоколади",
-                barcode="7622210286124",
-                supplierName="Монделийз България",
-                supplierMinimum=50.0,
-                unitsPerCase=24,
-                casePrice=38.40,
-                rrpPrice=2.29,
-                imageUrl="https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80",
-                hasTieredDiscount=True,
-                tier1Qty=5,
-                tier1Discount=5.0,
-                tier2Qty=10,
-                tier2Discount=10.0
-            ),
-            models.Product(
-                id="2",
-                name="Чипс Chio Паприка 140g",
-                category="Снаксове",
-                barcode="5900547001234",
-                supplierName="Интерснак България",
-                supplierMinimum=50.0,
-                unitsPerCase=18,
-                casePrice=43.20,
-                rrpPrice=3.19,
-                imageUrl="https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80",
-                hasTieredDiscount=True,
-                tier1Qty=5,
-                tier1Discount=5.0,
-                tier2Qty=10,
-                tier2Discount=10.0
-            ),
-            models.Product(
-                id="3",
-                name="Енергийна напитка Red Bull 250ml",
-                category="Напитки",
-                barcode="9002490100070",
-                supplierName="Ред Бул Дистрибуция",
-                supplierMinimum=80.0,
-                unitsPerCase=24,
-                casePrice=48.00,
-                rrpPrice=2.79,
-                imageUrl="https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80",
-                hasTieredDiscount=True,
-                tier1Qty=5,
-                tier1Discount=5.0,
-                tier2Qty=10,
-                tier2Discount=10.0
-            ),
-            models.Product(
-                id="4",
-                name="Кроасан 7 Days Max Какао 85g",
-                category="Сладки изделия",
-                barcode="5201360521204",
-                supplierName="Чипита България",
-                supplierMinimum=50.0,
-                unitsPerCase=30,
-                casePrice=36.00,
-                rrpPrice=1.69,
-                imageUrl="https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500&q=80",
-                hasTieredDiscount=True,
-                tier1Qty=5,
-                tier1Discount=5.0,
-                tier2Qty=10,
-                tier2Discount=10.0
-            ),
-        ]
-        db.add_all(initial_products)
-        db.commit()
-    db.close()
+    try:
+        if db.query(models.Product).count() == 0:
+            initial_products = [
+                models.Product(
+                    id="1",
+                    name="Шоколад Milka Alpine Milk 100g",
+                    category="Шоколади",
+                    barcode="7622210286124",
+                    supplierName="Монделийз България",
+                    supplierMinimum=50.0,
+                    unitsPerCase=24,
+                    casePrice=38.40,
+                    rrpPrice=2.29,
+                    imageUrl="https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80",
+                    hasTieredDiscount=True,
+                    tier1Qty=5,
+                    tier1Discount=5.0,
+                    tier2Qty=10,
+                    tier2Discount=10.0
+                ),
+                models.Product(
+                    id="2",
+                    name="Чипс Chio Паприка 140g",
+                    category="Снаксове",
+                    barcode="5900547001234",
+                    supplierName="Интерснак България",
+                    supplierMinimum=50.0,
+                    unitsPerCase=18,
+                    casePrice=43.20,
+                    rrpPrice=3.19,
+                    imageUrl="https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80",
+                    hasTieredDiscount=True,
+                    tier1Qty=5,
+                    tier1Discount=5.0,
+                    tier2Qty=10,
+                    tier2Discount=10.0
+                ),
+                models.Product(
+                    id="3",
+                    name="Енергийна напитка Red Bull 250ml",
+                    category="Напитки",
+                    barcode="9002490100070",
+                    supplierName="Ред Бул Дистрибуция",
+                    supplierMinimum=80.0,
+                    unitsPerCase=24,
+                    casePrice=48.00,
+                    rrpPrice=2.79,
+                    imageUrl="https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80",
+                    hasTieredDiscount=True,
+                    tier1Qty=5,
+                    tier1Discount=5.0,
+                    tier2Qty=10,
+                    tier2Discount=10.0
+                ),
+                models.Product(
+                    id="4",
+                    name="Кроасан 7 Days Max Какао 85g",
+                    category="Сладки изделия",
+                    barcode="5201360521204",
+                    supplierName="Чипита България",
+                    supplierMinimum=50.0,
+                    unitsPerCase=30,
+                    casePrice=36.00,
+                    rrpPrice=1.69,
+                    imageUrl="https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500&q=80",
+                    hasTieredDiscount=True,
+                    tier1Qty=5,
+                    tier1Discount=5.0,
+                    tier2Qty=10,
+                    tier2Discount=10.0
+                ),
+            ]
+            db.add_all(initial_products)
+            db.commit()
+    except Exception as e:
+        print(f"Seed info: {e}")
+    finally:
+        db.close()
 
 seed_initial_products()
 
