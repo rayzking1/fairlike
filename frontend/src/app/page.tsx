@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { 
   ShoppingBag, 
@@ -12,7 +12,9 @@ import {
   Plus,
   Minus,
   X,
-  Sparkles
+  Sparkles,
+  Store,
+  ChevronRight
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
@@ -79,6 +81,39 @@ const FEATURED_BRANDS = [
   },
 ];
 
+// Компонент за плавно появяване на секциите при навлизане в екрана
+function FadeInSection({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  const [isVisible, setVisible] = useState(false);
+  const domRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+        }
+      });
+    }, { threshold: 0.15 });
+
+    const current = domRef.current;
+    if (current) observer.observe(current);
+    return () => {
+      if (current) observer.unobserve(current);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={domRef}
+      className={`transition-all duration-700 ease-out transform ${
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+      } ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function HomePage() {
   const { items: cartItems, addToCart, setIsCartOpen } = useCart();
   const { user, setIsAuthOpen } = useAuth();
@@ -90,6 +125,24 @@ export default function HomePage() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
 
+  // Скрол динамика за плавно разсейване на Hero банера
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrollY(window.scrollY);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   // Welcome Registration Pop-up State
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
@@ -99,7 +152,7 @@ export default function HomePage() {
       if (!isDismissed) {
         const timer = setTimeout(() => {
           setShowWelcomePopup(true);
-        }, 5000); // 5 секунди след влизане в сайта
+        }, 5000);
         return () => clearTimeout(timer);
       }
     }
@@ -178,6 +231,10 @@ export default function HomePage() {
     setTimeout(() => setAddedAnimation(null), 1200);
   };
 
+  // Изчисляване на разсейването на Hero банера при скрол
+  const heroOpacity = Math.max(0, 1 - scrollY / 550);
+  const heroTranslateY = scrollY * 0.18;
+
   return (
     <div className="min-h-screen bg-white text-[#121212] antialiased selection:bg-[#121212] selection:text-white">
       
@@ -247,9 +304,16 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* 3. HERO EDITORIAL SECTION */}
+      {/* 3. HERO SECTION С ДИНАМИЧНО ПЛАВНО РАЗСЕЙВАНЕ ПРИ СКРОЛ */}
       <section className="max-w-[1360px] mx-auto px-4 sm:px-8 py-6">
-        <div className="relative rounded-2xl overflow-hidden min-h-[460px] flex items-center bg-[#2B2825]">
+        <div 
+          style={{
+            opacity: heroOpacity,
+            transform: `translateY(${heroTranslateY}px)`,
+            transition: "opacity 0.1s linear, transform 0.1s linear"
+          }}
+          className="relative rounded-2xl overflow-hidden min-h-[460px] flex items-center bg-[#2B2825] shadow-xs"
+        >
           <img 
             src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1600&q=80" 
             alt="FMCG Дистрибуция" 
@@ -283,8 +347,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4. FEATURED FMCG BRANDS */}
-      <section className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10">
+      {/* 4. FEATURED FMCG BRANDS (ПЛАВНО ПОЯВЯВАНЕ ПРИ СКРОЛ) */}
+      <FadeInSection className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl sm:text-2xl font-serif font-normal text-[#121212]">
             Официални производители & марки
@@ -321,10 +385,10 @@ export default function HomePage() {
             </Link>
           ))}
         </div>
-      </section>
+      </FadeInSection>
 
-      {/* 5. BRAND STORY BANNER */}
-      <section className="bg-[#2E2824] text-[#F5F2EB] py-16 px-4 sm:px-8 my-8">
+      {/* 5. BRAND STORY BANNER (ПЛАВНО ПОЯВЯВАНЕ ПРИ СКРОЛ) */}
+      <FadeInSection className="bg-[#2E2824] text-[#F5F2EB] py-16 px-4 sm:px-8 my-8">
         <div className="max-w-[1360px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
           <div>
             <span className="text-[11px] font-mono tracking-widest uppercase text-[#C4B5A5]">
@@ -346,10 +410,10 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-      </section>
+      </FadeInSection>
 
-      {/* 6. BESTSELLERS CATALOG */}
-      <section id="catalog-grid" className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10">
+      {/* 6. BESTSELLERS CATALOG (ПЛАВНО ПОЯВЯВАНЕ ПРИ СКРОЛ) */}
+      <FadeInSection id="catalog-grid" className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-xl sm:text-2xl font-serif font-normal text-[#121212]">
@@ -389,7 +453,7 @@ export default function HomePage() {
               return (
                 <div 
                   key={p.id}
-                  className="group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs"
+                  className="group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-300 flex flex-col justify-between overflow-hidden shadow-2xs hover:shadow-md"
                 >
                   <div>
                     {/* Снимка */}
@@ -511,7 +575,7 @@ export default function HomePage() {
             })}
           </div>
         )}
-      </section>
+      </FadeInSection>
 
       {/* 7. FOOTER */}
       <footer className="border-t border-[#EBE8E3] bg-[#FAF9F7] py-14 text-xs text-[#525252]">
@@ -564,7 +628,7 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* 8. FAIRE-STYLE WELCOME REGISTRATION POPUP */}
+      {/* 8. WELCOME POPUP */}
       {showWelcomePopup && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl border border-[#EBE8E3] text-[#121212] relative text-center space-y-5 animate-in zoom-in-95 duration-200">
