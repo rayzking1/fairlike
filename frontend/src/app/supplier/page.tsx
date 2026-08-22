@@ -19,7 +19,9 @@ import {
   FileDown,
   Percent,
   FileUp,
-  Truck
+  Truck,
+  Lock,
+  Building2
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
@@ -55,7 +57,7 @@ interface ParsedProductRow {
 }
 
 export default function SupplierDashboardPage() {
-  const { user } = useAuth();
+  const { user, setIsAuthOpen } = useAuth();
   
   const [activeTab, setActiveTab] = useState<"catalog" | "import" | "orders" | "add_product">("catalog");
   const [orders, setOrders] = useState<any[]>([]);
@@ -85,7 +87,7 @@ export default function SupplierDashboardPage() {
     casePrice: "",
     rrpPrice: "",
     unitsPerCase: "24",
-    category: "Напитки & Води",
+    category: "Безалкохолни & Води",
     imageUrl: "",
     hasTieredDiscount: true,
     tier1Qty: "5",
@@ -114,6 +116,7 @@ export default function SupplierDashboardPage() {
   };
 
   const fetchDashboardData = async () => {
+    if (!user || user.role !== "supplier") return;
     setLoading(true);
     const baseUrl = getApiBaseUrl();
     try {
@@ -139,7 +142,7 @@ export default function SupplierDashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   const supplierProducts = useMemo(() => {
     const rawCompany = (user?.company_name || user?.companyName || "").trim().toLowerCase();
@@ -297,7 +300,7 @@ export default function SupplierDashboardPage() {
             casePrice: parseFloat(String(row[2] || "0").replace(",", ".")) || 20,
             rrpPrice: parseFloat(String(row[3] || "0").replace(",", ".")) || 28,
             unitsPerCase: parseInt(String(row[4] || "24"), 10) || 24,
-            category: String(row[5] || "Напитки").trim(),
+            category: String(row[5] || "Безалкохолни & Води").trim(),
             imageUrl: String(row[6] || "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80").trim()
           });
         }
@@ -357,8 +360,8 @@ export default function SupplierDashboardPage() {
   const handleDownloadExcelTemplate = () => {
     const wsData = [
       ["Име на артикул", "Баркод", "Цена на стек (лв)", "Препоръчителна цена за 1бр (лв)", "Брой в стек", "Категория", "Линк към снимка"],
-      ["Coca-Cola Кен 330ml", "5449000000996", 24.00, 1.40, 24, "Напитки", "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500"],
-      ["Chio Чипс Паприка 140g", "4000436000000", 32.00, 2.60, 16, "Снаксове", "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500"]
+      ["Coca-Cola Кен 330ml", "5449000000996", 24.00, 1.40, 24, "Безалкохолни & Води", "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500"],
+      ["Chio Чипс Паприка 140g", "4000436000000", 32.00, 2.60, 16, "Чипс & Снаксове", "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500"]
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
@@ -379,6 +382,44 @@ export default function SupplierDashboardPage() {
     setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)));
     setStatusUpdating(null);
   };
+
+  // ROUTE GUARD: Ако не е вписан с роля supplier, показваме изчистен екран за автентикация
+  if (!user || user.role !== "supplier") {
+    return (
+      <div className="min-h-screen bg-white text-[#121212] antialiased">
+        <header className="sticky top-0 z-40 bg-white border-b border-[#EBE8E3]">
+          <div className="max-w-[1360px] mx-auto px-4 sm:px-8 h-18 flex items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <Link href="/" className="flex items-center gap-1 text-xs font-semibold text-[#525252] hover:text-[#121212] transition-colors">
+                <ChevronLeft className="w-4 h-4" /> Каталог
+              </Link>
+              <div className="h-4 w-px bg-[#EBE8E3]" />
+              <Link href="/" className="text-xl font-serif font-black tracking-[0.2em] text-[#121212] uppercase">
+                OPTOM
+              </Link>
+            </div>
+            <HeaderAuthButton />
+          </div>
+        </header>
+
+        <main className="max-w-md mx-auto px-4 py-24 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-[#FAF9F7] border border-[#EBE8E3] flex items-center justify-center mx-auto text-[#121212]">
+            <Lock className="w-5 h-5" />
+          </div>
+          <h1 className="text-xl font-serif text-[#121212]">Панелът е достъпен само за фабрики и вносители</h1>
+          <p className="text-xs text-[#737373] leading-relaxed">
+            Влезте във вашия фирмен акаунт на производител, за да управлявате каталога, наличностите и постъпилите заявки.
+          </p>
+          <button
+            onClick={() => setIsAuthOpen(true)}
+            className="w-full py-2.5 bg-[#121212] hover:bg-neutral-800 text-white font-semibold text-xs rounded-md shadow-xs transition-all cursor-pointer"
+          >
+            Вход като производител
+          </button>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white text-[#121212] antialiased selection:bg-[#121212] selection:text-white">
