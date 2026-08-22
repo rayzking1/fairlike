@@ -8,13 +8,11 @@ import {
   Package, 
   Check, 
   Lock, 
-  Star,
-  Plus,
-  Minus,
-  X,
-  Sparkles,
-  Store,
-  ChevronRight
+  Star, 
+  Plus, 
+  Minus, 
+  X, 
+  Sparkles 
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
@@ -81,8 +79,15 @@ const FEATURED_BRANDS = [
   },
 ];
 
-// Компонент за плавно появяване на секциите при навлизане в екрана
-function FadeInSection({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function FadeInSection({ 
+  children, 
+  className = "", 
+  id 
+}: { 
+  children: React.ReactNode; 
+  className?: string; 
+  id?: string; 
+}) {
   const [isVisible, setVisible] = useState(false);
   const domRef = useRef<HTMLDivElement | null>(null);
 
@@ -105,6 +110,7 @@ function FadeInSection({ children, className = "" }: { children: React.ReactNode
   return (
     <div
       ref={domRef}
+      id={id}
       className={`transition-all duration-700 ease-out transform ${
         isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
       } ${className}`}
@@ -125,7 +131,6 @@ export default function HomePage() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
 
-  // Скрол динамика за плавно разсейване на Hero банера
   const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
@@ -143,7 +148,6 @@ export default function HomePage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Welcome Registration Pop-up State
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
   useEffect(() => {
@@ -231,7 +235,6 @@ export default function HomePage() {
     setTimeout(() => setAddedAnimation(null), 1200);
   };
 
-  // Изчисляване на разсейването на Hero банера при скрол
   const heroOpacity = Math.max(0, 1 - scrollY / 550);
   const heroTranslateY = scrollY * 0.18;
 
@@ -304,7 +307,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* 3. HERO SECTION С ДИНАМИЧНО ПЛАВНО РАЗСЕЙВАНЕ ПРИ СКРОЛ */}
+      {/* 3. HERO EDITORIAL SECTION */}
       <section className="max-w-[1360px] mx-auto px-4 sm:px-8 py-6">
         <div 
           style={{
@@ -347,7 +350,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4. FEATURED FMCG BRANDS (ПЛАВНО ПОЯВЯВАНЕ ПРИ СКРОЛ) */}
+      {/* 4. FEATURED FMCG BRANDS */}
       <FadeInSection className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl sm:text-2xl font-serif font-normal text-[#121212]">
@@ -387,7 +390,7 @@ export default function HomePage() {
         </div>
       </FadeInSection>
 
-      {/* 5. BRAND STORY BANNER (ПЛАВНО ПОЯВЯВАНЕ ПРИ СКРОЛ) */}
+      {/* 5. BRAND STORY BANNER */}
       <FadeInSection className="bg-[#2E2824] text-[#F5F2EB] py-16 px-4 sm:px-8 my-8">
         <div className="max-w-[1360px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
           <div>
@@ -412,7 +415,7 @@ export default function HomePage() {
         </div>
       </FadeInSection>
 
-      {/* 6. BESTSELLERS CATALOG (ПЛАВНО ПОЯВЯВАНЕ ПРИ СКРОЛ) */}
+      {/* 6. BESTSELLERS CATALOG */}
       <FadeInSection id="catalog-grid" className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10">
         <div className="flex items-center justify-between mb-6">
           <div>
