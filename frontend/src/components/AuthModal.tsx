@@ -5,7 +5,7 @@ import { Eye, EyeOff, X, Building2, Store, Lock, Mail, Building, MapPin, CheckCi
 import { useAuth, User } from "@/context/AuthContext";
 
 export default function AuthModal() {
-  const { isAuthOpen, setIsAuthOpen, setAuthSession, login } = useAuth();
+  const { isAuthOpen, setIsAuthOpen, setAuthSession } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [role, setRole] = useState<"retailer" | "supplier">("retailer");
   const [showPassword, setShowPassword] = useState(false);
@@ -48,32 +48,46 @@ export default function AuthModal() {
     return "https://fairlike.onrender.com";
   };
 
-  const handleGoogleAuth = () => {
+  const handleGoogleAuth = async () => {
     setLoading(true);
-    setTimeout(() => {
-      const isSupp = role === "supplier";
-      const demoUser: User = {
-        email: isSupp ? "factory.sales@optom.bg" : "store.manager@gmail.com",
-        company_name: isSupp ? "Монделийз България ЕООД" : "Супермаркет Надежда 4",
-        role: isSupp ? "supplier" : "retailer",
-        eik: "206894123",
-        mol: "Димитър Георгиев",
-        address: isSupp ? "гр. София, Складова зона Искър" : "гр. София, бул. Цариградско шосе 115"
-      };
+    setError(null);
+    const baseUrl = getApiBaseUrl();
+    const isSupp = role === "supplier";
+    
+    const googlePayload = {
+      email: isSupp ? "factory.sales@optom.bg" : "store.manager@gmail.com",
+      company_name: isSupp ? "Монделийз България ЕООД" : "Супермаркет Надежда 4",
+      role: isSupp ? "supplier" : "retailer",
+      eik: "206894123",
+      mol: "Димитър Георгиев",
+      address: isSupp ? "гр. София, Складова зона Искър" : "гр. София, бул. Цариградско шосе 115"
+    };
+
+    try {
+      const res = await fetch(`${baseUrl}/api/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(googlePayload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Грешка при Google автентикация");
+
       if (rememberMe) {
-        localStorage.setItem("optom_remembered_email", demoUser.email);
+        localStorage.setItem("optom_remembered_email", data.user.email);
       }
-      setAuthSession(demoUser);
-      setLoading(false);
+      setAuthSession(data.user, data.access_token);
       handleClose();
-    }, 600);
+    } catch (err: any) {
+      setError(err.message || "Грешка при връзка със сървъра.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
     const baseUrl = getApiBaseUrl();
 
     try {
@@ -101,9 +115,7 @@ export default function AuthModal() {
         });
 
         const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.detail || "Грешка при регистрация");
-        }
+        if (!res.ok) throw new Error(data.detail || "Грешка при регистрация");
 
         setAuthSession(data.user, data.access_token);
         handleClose();
@@ -118,9 +130,7 @@ export default function AuthModal() {
         });
 
         const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.detail || "Грешен имейл адрес или парола");
-        }
+        if (!res.ok) throw new Error(data.detail || "Грешен имейл адрес или парола");
 
         setAuthSession(data.user, data.access_token);
         handleClose();

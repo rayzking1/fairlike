@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
+from pydantic import BaseModel, EmailStr
 import bcrypt
 import uuid
 import os
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "OPTOM_B2B_SUPER_SECRET_PRODUCTION_KEY_2026")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 30  # 30 дни валидност на сесията
 
 security = HTTPBearer(auto_error=False)
 
@@ -55,6 +56,48 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depen
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
+
+class GoogleAuthRequest(BaseModel):
+    email: EmailStr
+    company_name: str
+    role: str
+    eik: Optional[str] = "206894123"
+    mol: Optional[str] = "Управител"
+    address: Optional[str] = "гр. София"
+
+@router.post("/google", response_model=TokenResponse)
+def auth_google(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
+    """Реално създаване или влизане през Google директно в базата данни"""
+    user = db.query(models.User).filter(models.User.email == payload.email.lower()).first()
+    if not user:
+        user = models.User(
+            id=str(uuid.uuid4())[:8],
+            email=payload.email.lower(),
+            hashed_password=hash_password(str(uuid.uuid4())),
+            company_name=payload.company_name,
+            eik=payload.eik or "206894123",
+            address=payload.address or "гр. София",
+            mol=payload.mol or "Управител",
+            role=payload.role
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    token = create_access_token({"sub": user.id, "role": user.role})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "company_name": user.company_name,
+            "eik": user.eik,
+            "address": user.address,
+            "mol": user.mol,
+            "role": user.role
+        }
+    }
 
 @router.post("/register", response_model=TokenResponse)
 def register(user_in: UserRegister, db: Session = Depends(get_db)):
@@ -117,6 +160,7 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserOut)
 def get_me(current_user: models.User = Depends(get_current_user)):
+    """Връща актуалния профил от базата данни при зареждане на сайта"""
     return {
         "id": current_user.id,
         "email": current_user.email,

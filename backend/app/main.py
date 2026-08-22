@@ -17,11 +17,10 @@ import resend
 import models
 from database import engine, get_db, SessionLocal
 from routers.invoices import router as invoices_router
-from routers.auth import router as auth_router
+from routers.auth import router as auth_router, get_optional_user
 
 models.Base.metadata.create_all(bind=engine)
 
-# Автоматично добавяне на липсващите колони в съществуваща PostgreSQL/SQLite база данни
 def run_auto_migrations():
     with engine.connect() as conn:
         columns_to_add = [
@@ -345,14 +344,16 @@ def add_product(item: ProductCreate, db: Session = Depends(get_db)):
     return new_product
 
 @app.get("/api/orders")
-def get_orders(email: Optional[str] = None, db: Session = Depends(get_db)):
+def get_orders(email: Optional[str] = None, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
     query = db.query(models.Order)
-    if email:
+    if current_user:
+        query = query.filter((models.Order.user_id == current_user.id) | (models.Order.invoiceEmail == current_user.email))
+    elif email:
         query = query.filter(models.Order.invoiceEmail == email)
     return query.order_by(models.Order.created_at.desc()).all()
 
 @app.post("/api/orders")
-def create_order(order_in: CreateOrderRequest, db: Session = Depends(get_db)):
+def create_order(order_in: CreateOrderRequest, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
     order_id = str(uuid.uuid4())[:8].upper()
     db_order = models.Order(
         id=order_id,
@@ -365,7 +366,8 @@ def create_order(order_in: CreateOrderRequest, db: Session = Depends(get_db)):
         vat=order_in.vat,
         total=order_in.total,
         estimatedProfit=order_in.estimatedProfit,
-        status="pending_delivery"
+        status="pending_delivery",
+        user_id=current_user.id if current_user else None
     )
     db.add(db_order)
 
@@ -385,7 +387,7 @@ def create_order(order_in: CreateOrderRequest, db: Session = Depends(get_db)):
             "ean": prod.barcode if prod else "N/A",
             "quantity": it.quantityCases,
             "unit": "стека",
-            "unit_price": it.casePrice,
+            "unit_price": it.case_price,
             "total_price": round(it.quantityCases * it.casePrice, 2)
         })
 
