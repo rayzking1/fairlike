@@ -15,8 +15,7 @@ import {
   ShoppingBag, 
   Building, 
   Calendar, 
-  Check,
-  Building2
+  Check
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
@@ -44,7 +43,6 @@ export default function OrdersPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [reorderingId, setReorderingId] = useState<string | null>(null);
 
-  // Ако потребителят е Доставчик, го препращаме към /supplier
   useEffect(() => {
     if (user && user.role === "supplier") {
       router.replace("/supplier");
@@ -145,7 +143,7 @@ export default function OrdersPage() {
         casePrice: item.casePrice,
         rrpPrice: item.casePrice * 1.35,
         unitsPerCase: item.unitsPerCase,
-        category: "Напитки & Снаксове",
+        category: "Безалкохолни & Води",
         supplierName: item.supplierName,
         supplierMinimum: 50,
         imageUrl: item.imageUrl,
@@ -165,7 +163,7 @@ export default function OrdersPage() {
     const baseUrl = getApiBaseUrl();
     try {
       const res = await fetch(`${baseUrl}/api/orders/${orderId}/invoice`);
-      if (!res.ok) throw new Error("Фактурата не можа да бъде генерирана");
+      if (!res.ok) throw new Error("Фактурата не можа да бъде свалена");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -185,77 +183,73 @@ export default function OrdersPage() {
   const getStatusBadge = (status?: string) => {
     switch (status) {
       case "delivered":
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><PackageCheck className="w-3.5 h-3.5" /> Доставена</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-medium bg-[#FAF9F7] text-[#121212] border border-[#EBE8E3]"><PackageCheck className="w-3.5 h-3.5" /> Доставена</span>;
       case "shipped":
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><Truck className="w-3.5 h-3.5" /> Натоварена</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-medium bg-[#FAF9F7] text-[#121212] border border-[#EBE8E3]"><Truck className="w-3.5 h-3.5" /> Натоварена</span>;
       case "processing":
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200"><Clock className="w-3.5 h-3.5" /> В подготовка</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-medium bg-[#FAF9F7] text-[#121212] border border-[#EBE8E3]"><Clock className="w-3.5 h-3.5" /> В подготовка</span>;
       default:
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Приета заявка</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-medium bg-[#FAF9F7] text-[#121212] border border-[#EBE8E3]"><CheckCircle2 className="w-3.5 h-3.5" /> Приета заявка</span>;
     }
   };
 
   if (user?.role === "supplier") return null;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 antialiased">
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-6">
+    <div className="min-h-screen bg-white text-[#121212] antialiased selection:bg-[#121212] selection:text-white">
+      
+      {/* ХЕДЪР */}
+      <header className="sticky top-0 z-40 bg-white border-b border-[#EBE8E3]">
+        <div className="max-w-[1360px] mx-auto px-4 sm:px-8 h-18 flex items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors">
+            <Link href="/" className="flex items-center gap-1 text-xs font-semibold text-[#525252] hover:text-[#121212] transition-colors">
               <ChevronLeft className="w-4 h-4" /> Каталог
             </Link>
-            <div className="h-4 w-px bg-slate-200" />
-            <Link href="/" className="flex items-center gap-2 group">
-              <div className="w-8 h-8 rounded-lg bg-slate-950 flex items-center justify-center text-white font-black text-sm">
-                O
-              </div>
-              <span className="text-xl font-black tracking-tight text-slate-950">
-                OPTOM<span className="text-emerald-600">.BG</span>
-              </span>
+            <div className="h-4 w-px bg-[#EBE8E3]" />
+            <Link href="/" className="text-xl font-serif font-black tracking-[0.2em] text-[#121212] uppercase">
+              OPTOM
             </Link>
           </div>
-          <div className="flex items-center gap-3">
-            <HeaderAuthButton />
-          </div>
+          <HeaderAuthButton />
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-8 py-10">
+      {/* СЪДЪРЖАНИЕ */}
+      <main className="max-w-[1100px] mx-auto px-4 sm:px-8 py-10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
-            <span className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+            <span className="text-[10px] font-mono tracking-widest uppercase text-[#737373] font-bold">
               B2B Клиентски Портал
             </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-950 mt-1.5">
+            <h1 className="text-2xl sm:text-3xl font-serif font-normal text-[#121212] mt-1">
               История на зарежданията & Фактури
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-[#737373] mt-0.5">
               Преглеждайте издадените фактури по ЗДДС и повтаряйте поръчките си с 1 клик.
             </p>
           </div>
 
           <Link
             href="/"
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#121212] hover:bg-neutral-800 text-white rounded-md text-xs font-semibold shadow-xs transition-all"
           >
-            <ShoppingBag className="w-4 h-4" /> Ново зареждане
+            <ShoppingBag className="w-3.5 h-3.5" /> Ново зареждане
           </Link>
         </div>
 
         {loading ? (
           <div className="py-24 text-center">
-            <div className="inline-block w-8 h-8 border-3 border-slate-950 border-t-transparent rounded-full animate-spin mb-3"></div>
-            <p className="text-xs text-slate-500 font-semibold">Зареждане на вашите поръчки...</p>
+            <div className="inline-block w-6 h-6 border-2 border-[#121212] border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p className="text-xs text-[#737373]">Зареждане на вашите поръчки...</p>
           </div>
         ) : orders.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center shadow-xs">
-            <FileText className="w-12 h-12 stroke-1 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-sm font-bold text-slate-800">Все още нямате направени заявки</h3>
-            <p className="text-xs text-slate-400 mt-1">След като завършите поръчка, фактурите ще се генерират тук.</p>
+          <div className="bg-[#FAF9F7] rounded-xl border border-[#EBE8E3] p-12 text-center">
+            <FileText className="w-8 h-8 stroke-1 text-neutral-400 mx-auto mb-2" />
+            <h3 className="text-xs font-bold text-[#121212]">Все още нямате направени заявки</h3>
+            <p className="text-[11px] text-[#737373] mt-1">След като направите поръчка, фактурите ще се генерират тук.</p>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {orders.map((order) => {
               const items = extractItemsFromOrder(order);
               const totalItemsCount = items.reduce((sum, it) => sum + it.quantityCases, 0);
@@ -269,44 +263,44 @@ export default function OrdersPage() {
               const totalAmount = Number(order.total || order.subtotal || 0);
 
               return (
-                <div key={order.id} className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all overflow-hidden">
-                  <div className="p-4 sm:p-5 bg-slate-50/70 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
+                <div key={order.id} className="bg-white rounded-xl border border-[#EBE8E3] shadow-2xs overflow-hidden">
+                  <div className="p-4 sm:p-5 bg-[#FAF9F7] border-b border-[#EBE8E3] flex flex-wrap items-center justify-between gap-4">
                     <div className="flex flex-wrap items-center gap-4">
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400">Фактура №</span>
-                        <p className="text-sm font-black font-mono text-slate-950">#{String(order.id).slice(0, 10)}</p>
+                        <span className="text-[10px] uppercase font-mono text-[#737373]">Фактура №</span>
+                        <p className="text-sm font-bold font-mono text-[#121212]">#{String(order.id).slice(0, 10)}</p>
                       </div>
-                      <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+                      <div className="h-6 w-px bg-[#EBE8E3] hidden sm:block" />
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400">Дата</span>
-                        <p className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" /> {formattedDate}
+                        <span className="text-[10px] uppercase font-mono text-[#737373]">Дата</span>
+                        <p className="text-xs font-medium text-[#121212] flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-[#737373]" /> {formattedDate}
                         </p>
                       </div>
-                      <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+                      <div className="h-6 w-px bg-[#EBE8E3] hidden sm:block" />
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400">Обект</span>
-                        <p className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                          <Building className="w-3.5 h-3.5 text-slate-400" /> {storeTitle}
+                        <span className="text-[10px] uppercase font-mono text-[#737373]">Обект</span>
+                        <p className="text-xs font-medium text-[#121212] flex items-center gap-1">
+                          <Building className="w-3.5 h-3.5 text-[#737373]" /> {storeTitle}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5">
                       {getStatusBadge(order.status)}
 
                       <button
                         onClick={() => handleReorder(order)}
                         disabled={reorderingId === order.id}
-                        className="px-3.5 py-2 bg-slate-950 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer hover:scale-105"
+                        className="px-3 py-1.5 bg-[#121212] hover:bg-neutral-800 text-white rounded-md text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                       >
                         {reorderingId === order.id ? (
                           <>
-                            <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-400" /> Добавено!
+                            <Check className="w-3.5 h-3.5 stroke-[3]" /> Добавено!
                           </>
                         ) : (
                           <>
-                            <RotateCcw className="w-3.5 h-3.5 text-emerald-400" /> 1-Click Reorder
+                            <RotateCcw className="w-3.5 h-3.5" /> 1-Click Reorder
                           </>
                         )}
                       </button>
@@ -314,7 +308,7 @@ export default function OrdersPage() {
                       <button
                         onClick={() => handleDownloadInvoice(order.id)}
                         disabled={downloadingId === order.id}
-                        className="p-2 text-slate-600 hover:text-slate-950 hover:bg-slate-200 rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                        className="p-1.5 text-[#525252] hover:text-[#121212] hover:bg-white rounded-md border border-[#EBE8E3] transition-colors cursor-pointer"
                         title="Изтегли PDF фактура"
                       >
                         <Download className="w-4 h-4" />
@@ -324,19 +318,19 @@ export default function OrdersPage() {
 
                   <div className="p-4 sm:p-5 space-y-4">
                     {items.length > 0 && (
-                      <div className="divide-y divide-slate-100">
+                      <div className="divide-y divide-[#F2F0EB]">
                         {items.map((it, idx) => (
                           <div key={idx} className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between text-xs">
                             <div className="flex items-center gap-3">
-                              <span className="w-7 h-7 rounded-lg bg-slate-100 font-mono font-black text-slate-800 flex items-center justify-center text-xs border border-slate-200">
+                              <span className="w-6 h-6 rounded bg-[#FAF9F7] font-mono font-bold text-[#121212] flex items-center justify-center text-xs border border-[#EBE8E3]">
                                 {it.quantityCases}x
                               </span>
                               <div>
-                                <p className="font-bold text-slate-900">{it.productName}</p>
-                                <p className="text-[10px] text-slate-400 font-mono">{it.casePrice.toFixed(2)} лв./стек</p>
+                                <p className="font-semibold text-[#121212]">{it.productName}</p>
+                                <p className="text-[10px] text-[#737373] font-mono">{it.casePrice.toFixed(2)} лв./стек</p>
                               </div>
                             </div>
-                            <span className="font-black font-mono text-slate-900">
+                            <span className="font-bold font-mono text-[#121212]">
                               {(it.quantityCases * it.casePrice).toFixed(2)} лв.
                             </span>
                           </div>
@@ -344,16 +338,16 @@ export default function OrdersPage() {
                       </div>
                     )}
 
-                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 p-3 rounded-xl">
-                      <div className="flex items-center gap-4 text-xs text-slate-500">
-                        <span>Стекове: <strong className="text-slate-800">{totalItemsCount} бр.</strong></span>
-                        <span>Условия: <strong className="text-slate-800 uppercase font-mono">{terms}</strong></span>
-                        <span className="text-emerald-700 font-bold">Марж: +{profit.toFixed(2)} лв.</span>
+                    <div className="pt-3 border-t border-[#EBE8E3] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FAF9F7] p-3 rounded-lg text-xs">
+                      <div className="flex items-center gap-4 text-[#737373]">
+                        <span>Стекове: <strong className="text-[#121212]">{totalItemsCount} бр.</strong></span>
+                        <span>Условия: <strong className="text-[#121212] uppercase font-mono">{terms}</strong></span>
+                        <span>Марж: <strong className="text-[#121212] font-mono">+{profit.toFixed(2)} лв.</strong></span>
                       </div>
 
-                      <div className="text-right flex items-center justify-end gap-3">
-                        <span className="text-xs text-slate-400">Общо с ДДС:</span>
-                        <span className="text-base font-black text-slate-950 font-mono">
+                      <div className="text-right flex items-center justify-end gap-2">
+                        <span className="text-xs text-[#737373]">Общо с ДДС:</span>
+                        <span className="text-sm font-bold text-[#121212] font-mono">
                           {totalAmount.toFixed(2)} лв.
                         </span>
                       </div>
