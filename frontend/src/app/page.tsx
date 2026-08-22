@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { 
   ShoppingBag, 
@@ -74,12 +74,19 @@ export default function HomePage() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
 
-  // Скрол динамика за плавно свиване и изчезване на Hero секцията
+  // Фино и плавно засичане на скрола
   const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      setScrollY(window.scrollY);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrollY(window.scrollY);
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
@@ -171,16 +178,14 @@ export default function HomePage() {
     }
   };
 
-  // Изчисляване на плавното свиване на hero секцията (от 0 до 400px скрол)
-  const heroOpacity = Math.max(0.15, 1 - scrollY / 450);
-  const heroScale = Math.max(0.96, 1 - scrollY / 3000);
-  const heroTranslate = Math.min(60, scrollY * 0.15);
+  // Изключително деликатно, почти незабележимо омекотяване (само от 1.00 до 0.92)
+  const heroSoftness = Math.max(0.92, 1 - scrollY / 1400);
 
   return (
-    <div className="min-h-screen bg-[#FDFDFD] text-neutral-900 antialiased selection:bg-neutral-900 selection:text-white">
+    <div className="min-h-screen bg-[#FAFAFA] text-neutral-900 antialiased selection:bg-neutral-900 selection:text-white">
       
       {/* 1. НАВИГАЦИЯ */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-neutral-200/60 transition-all">
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-neutral-200/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between gap-6">
           
           <Link href="/" className="flex items-center gap-2">
@@ -202,7 +207,7 @@ export default function HomePage() {
             {!isSupplier && (
               <button
                 onClick={handleCartClick}
-                className="relative flex items-center gap-2 px-3 py-1.5 bg-neutral-950 hover:bg-neutral-850 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer hover:scale-[1.02]"
+                className="relative flex items-center gap-2 px-3.5 py-1.5 bg-neutral-950 hover:bg-neutral-850 text-white rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer"
               >
                 {user ? <ShoppingBag className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-neutral-400" />}
                 <span className="hidden sm:inline">Заявка</span>
@@ -217,21 +222,19 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* 2. HERO СЕКЦИЯ С ПЛАВНО СВИВАНЕ И FADE-OUT ПРИ СКРОЛ */}
+      {/* 2. HERO СЕКЦИЯ С НЕЖНО ОМЕКОТЯВАНЕ */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-4">
         <div 
           style={{
-            opacity: heroOpacity,
-            transform: `scale(${heroScale}) translateY(${heroTranslate}px)`,
-            transformOrigin: "top center",
-            transition: "opacity 0.1s ease-out, transform 0.1s ease-out"
+            opacity: heroSoftness,
+            transition: "opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)"
           }}
           className="rounded-3xl bg-neutral-950 text-white p-8 sm:p-14 relative overflow-hidden border border-neutral-900 shadow-sm"
         >
           <div className="max-w-2xl relative z-10 space-y-6 text-left">
             
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-300 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 animate-pulse"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400"></span>
               Faire-модел за търговия на едро в България
             </div>
 
@@ -248,7 +251,7 @@ export default function HomePage() {
                 onClick={() => {
                   document.getElementById("catalog-section")?.scrollIntoView({ behavior: "smooth" });
                 }}
-                className="px-6 py-3 bg-white hover:bg-neutral-100 text-neutral-950 rounded-xl text-xs font-bold tracking-tight shadow-sm flex items-center gap-2 transition-all cursor-pointer hover:translate-x-0.5"
+                className="px-6 py-3 bg-white hover:bg-neutral-100 text-neutral-950 rounded-xl text-xs font-bold tracking-tight shadow-sm flex items-center gap-2 transition-all cursor-pointer"
               >
                 Към каталога на едро <ArrowRight className="w-3.5 h-3.5" />
               </button>
@@ -283,8 +286,8 @@ export default function HomePage() {
       </section>
 
       {/* 3. ИСТОРИЯТА И ИДЕЯТА ЗАД OPTOM.BG */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white border border-neutral-200/80 rounded-3xl p-6 sm:p-10 shadow-xs hover:border-neutral-300 transition-colors">
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white border border-neutral-200/80 rounded-3xl p-6 sm:p-10 shadow-xs">
           
           <div className="md:col-span-1 space-y-3">
             <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 font-bold">Нашата Мисия</span>
@@ -297,7 +300,7 @@ export default function HomePage() {
           </div>
 
           <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="space-y-2 p-5 rounded-2xl bg-[#FAFAFA] border border-neutral-100">
+            <div className="space-y-2 p-5 rounded-2xl bg-neutral-50 border border-neutral-100">
               <div className="w-7 h-7 rounded-lg bg-neutral-950 text-white flex items-center justify-center font-black text-xs">
                 01
               </div>
@@ -307,7 +310,7 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="space-y-2 p-5 rounded-2xl bg-[#FAFAFA] border border-neutral-100">
+            <div className="space-y-2 p-5 rounded-2xl bg-neutral-50 border border-neutral-100">
               <div className="w-7 h-7 rounded-lg bg-neutral-950 text-white flex items-center justify-center font-black text-xs">
                 02
               </div>
@@ -337,7 +340,7 @@ export default function HomePage() {
             <Link
               key={brand.name}
               href={`/brand/${encodeURIComponent(brand.name)}`}
-              className="group bg-white rounded-2xl border border-neutral-200/80 hover:border-neutral-950 p-4 transition-all duration-300 shadow-xs flex flex-col justify-between hover:-translate-y-1 hover:shadow-md"
+              className="group bg-white rounded-2xl border border-neutral-200/80 hover:border-neutral-950 p-4 transition-all duration-200 shadow-xs flex flex-col justify-between"
             >
               <div>
                 <div className="relative aspect-16/10 rounded-xl overflow-hidden bg-neutral-100 mb-3 border border-neutral-100">
@@ -388,7 +391,7 @@ export default function HomePage() {
                 className={`cursor-pointer rounded-2xl bg-white border transition-all duration-200 p-3.5 flex items-center gap-3 ${
                   isSelected 
                     ? "border-neutral-950 ring-1 ring-neutral-950 shadow-xs" 
-                    : "border-neutral-200/80 hover:border-neutral-400 shadow-xs hover:-translate-y-0.5"
+                    : "border-neutral-200/80 hover:border-neutral-400 shadow-xs"
                 }`}
               >
                 <div className="w-11 h-11 rounded-xl overflow-hidden bg-neutral-100 shrink-0">
@@ -448,7 +451,7 @@ export default function HomePage() {
               return (
                 <div 
                   key={p.id}
-                  className="group bg-white rounded-2xl border border-neutral-200/80 hover:border-neutral-950 transition-all duration-300 shadow-xs flex flex-col justify-between overflow-hidden hover:-translate-y-1 hover:shadow-md"
+                  className="group bg-white rounded-2xl border border-neutral-200/80 hover:border-neutral-950 transition-all duration-200 shadow-xs flex flex-col justify-between overflow-hidden"
                 >
                   <div>
                     {/* Снимка */}
