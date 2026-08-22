@@ -19,7 +19,8 @@ import {
   AlertCircle, 
   Store, 
   Check,
-  Percent
+  Percent,
+  PartyPopper
 } from "lucide-react";
 import { useCart, CartProduct, getTieredPrice } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -33,6 +34,66 @@ interface CartDrawerProps {
   onClearCart?: () => void;
   apiBaseUrl?: string;
   [key: string]: any;
+}
+
+function fireConfetti(canvas: HTMLCanvasElement | null) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+
+  const colors = ["#121212", "#404040", "#737373", "#A3A3A3", "#D4D4D4", "#F59E0B"];
+  const particles: any[] = [];
+
+  for (let i = 0; i < 45; i++) {
+    particles.push({
+      x: canvas.width / 2 + (Math.random() - 0.5) * 80,
+      y: 20,
+      vx: (Math.random() - 0.5) * 8,
+      vy: (Math.random() - 1.2) * 5,
+      size: Math.random() * 5 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rotation: Math.random() * 360,
+      rSpeed: (Math.random() - 0.5) * 10,
+      alpha: 1,
+      decay: Math.random() * 0.02 + 0.015
+    });
+  }
+
+  let animationFrame: number;
+  const render = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+
+    particles.forEach((p) => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.18;
+      p.rotation += p.rSpeed;
+      p.alpha -= p.decay;
+
+      if (p.alpha > 0) {
+        alive = true;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rotation * Math.PI) / 180);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.7);
+        ctx.restore();
+      }
+    });
+
+    if (alive) {
+      animationFrame = requestAnimationFrame(render);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  render();
 }
 
 export default function CartDrawer(props: CartDrawerProps) {
@@ -61,6 +122,9 @@ export default function CartDrawer(props: CartDrawerProps) {
   const [loading, setLoading] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState<any>(null);
+
+  const canvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
+  const prevMetStatus = useRef<Record<string, boolean>>({});
 
   const [formData, setFormData] = useState({
     storeName: "",
@@ -127,6 +191,18 @@ export default function CartDrawer(props: CartDrawerProps) {
 
     return Object.values(groups);
   }, [contextItems]);
+
+  useEffect(() => {
+    brandGroups.forEach((group) => {
+      const isMet = group.total >= group.minimum;
+      const wasMet = prevMetStatus.current[group.supplierName];
+
+      if (isMet && !wasMet) {
+        fireConfetti(canvasRefs.current[group.supplierName]);
+      }
+      prevMetStatus.current[group.supplierName] = isMet;
+    });
+  }, [brandGroups]);
 
   const unmetMoqBrands = brandGroups.filter((g) => g.total < g.minimum);
   const isMoqSatisfied = unmetMoqBrands.length === 0;
@@ -228,7 +304,7 @@ export default function CartDrawer(props: CartDrawerProps) {
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
         <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col text-[#121212] border-l border-[#EBE8E3]">
           
-          {/* Хедър на чекмеджето */}
+          {/* Хедър */}
           <div className="p-4.5 border-b border-[#EBE8E3] flex items-center justify-between bg-white">
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-4 h-4 text-[#121212]" />
@@ -269,9 +345,15 @@ export default function CartDrawer(props: CartDrawerProps) {
                       return (
                         <div 
                           key={group.supplierName} 
-                          className="rounded-xl border border-[#EBE8E3] bg-white overflow-hidden"
+                          className="relative rounded-xl border border-[#EBE8E3] bg-white overflow-hidden"
                         >
-                          {/* Горна част на бранда */}
+                          {/* Canvas за конфети ефекта */}
+                          <canvas 
+                            ref={(el) => { canvasRefs.current[group.supplierName] = el; }}
+                            className="absolute inset-0 pointer-events-none z-20 w-full h-full"
+                          />
+
+                          {/* Бранд хедър */}
                           <div className="p-3.5 bg-[#FAF9F7] border-b border-[#EBE8E3] space-y-2">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-1.5">
@@ -283,7 +365,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                               </span>
                             </div>
 
-                            {/* Фина монохромна прогрес лента */}
+                            {/* Прогрес бар */}
                             <div className="w-full bg-[#E5E0D8] h-1.5 rounded-full overflow-hidden">
                               <div 
                                 className={`h-full rounded-full transition-all duration-300 ${
@@ -295,8 +377,9 @@ export default function CartDrawer(props: CartDrawerProps) {
 
                             <div className="flex items-center justify-between text-[11px] text-[#525252]">
                               {isMet ? (
-                                <span className="font-semibold text-[#121212] flex items-center gap-1">
-                                  <Check className="w-3 h-3 stroke-[3]" /> Минималният праг е достигнат
+                                <span className="font-semibold text-[#121212] flex items-center gap-1.5">
+                                  <PartyPopper className="w-3.5 h-3.5 text-amber-500 animate-bounce" />
+                                  <span>Минимумът е достигнат! 🎉</span>
                                 </span>
                               ) : (
                                 <span>
@@ -310,7 +393,7 @@ export default function CartDrawer(props: CartDrawerProps) {
                             </div>
                           </div>
 
-                          {/* Списък с артикули */}
+                          {/* Артикули */}
                           <div className="p-3 divide-y divide-[#F2F0EB]">
                             {group.items.map((item) => {
                               const { effectivePrice, discountPercent } = getTieredPrice(item.product, item.quantityCases);
@@ -561,7 +644,6 @@ export default function CartDrawer(props: CartDrawerProps) {
           {step !== "success" && items.length > 0 && (
             <div className="p-4 border-t border-[#EBE8E3] bg-[#FAF9F7] space-y-3">
               
-              {/* Елегантни B2B предимства */}
               <div className="space-y-1.5 text-xs text-[#525252] pb-2 border-b border-[#EBE8E3]">
                 {totalSavedFromTiers > 0 && (
                   <div className="flex justify-between items-center text-[#121212] font-semibold">
@@ -575,7 +657,6 @@ export default function CartDrawer(props: CartDrawerProps) {
                 </div>
               </div>
 
-              {/* Изчисление на суми */}
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between text-[#737373]">
                   <span>Данъчна основа:</span>
