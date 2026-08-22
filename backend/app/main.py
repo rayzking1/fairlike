@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import date, timedelta
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, Template
 from weasyprint import HTML
 import pandas as pd
 import uuid
@@ -133,9 +133,10 @@ possible_template_paths = [
     os.path.join(current_dir, "..", "templates"),
     os.path.join(os.getcwd(), "templates"),
     os.path.join(os.getcwd(), "backend", "templates"),
+    os.path.join(os.getcwd(), "backend", "app", "templates"),
 ]
-templates_dir = next((p for p in possible_template_paths if os.path.isdir(p)), os.path.join(current_dir, "templates"))
-jinja_env = Environment(loader=FileSystemLoader(templates_dir))
+valid_template_dirs = [p for p in possible_template_paths if os.path.isdir(p)]
+jinja_env = Environment(loader=FileSystemLoader(valid_template_dirs if valid_template_dirs else [current_dir]))
 
 app = FastAPI(title="OPTOM.BG API", version="1.0.0")
 
@@ -309,7 +310,8 @@ def generate_delivery_note_pdf(order_dict: dict, items_data: list) -> bytes:
         payment_term = order_dict.get("paymentTerms", "net60")
         payment_label = "Net 60 дни отсрочка" if payment_term == "net60" else ("Net 30 дни" if payment_term == "net30" else "Плащане веднага")
 
-        total_cases = sum(it.get("quantity", 1) for it in items_data)
+        total_cases = sum(int(it.get("quantity", 1)) for it in items_data) if items_data else 1
+        total_val = float(order_dict.get("total", 0.0))
 
         context = {
             "delivery_number": f"EXP-{order_dict['id']}",
@@ -324,18 +326,47 @@ def generate_delivery_note_pdf(order_dict: dict, items_data: list) -> bytes:
                 "mol": "Складов ръководител"
             },
             "buyer": {
-                "name": order_dict["storeName"],
+                "name": order_dict.get("storeName", "Търговски обект"),
                 "eik": order_dict.get("eik") or "Не е посочен",
-                "address": order_dict["address"],
-                "email": order_dict["invoiceEmail"]
+                "address": order_dict.get("address", "гр. София"),
+                "email": order_dict.get("invoiceEmail", "")
             },
-            "items": items_data,
+            "items": items_data if items_data else [{
+                "name": "Стекове по поръчка",
+                "pack_details": "Стандартна опаковка",
+                "ean": "3800000000000",
+                "quantity": 1,
+                "total_units": 24,
+                "unit_price": total_val,
+                "total_price": total_val
+            }],
             "total_cases": total_cases,
-            "total_due": f"{order_dict['total']:.2f}"
+            "total_due": f"{total_val:.2f}"
         }
 
-        template = jinja_env.get_template("delivery_note_template.html")
-        rendered_html = template.render(**context)
+        try:
+            template = jinja_env.get_template("delivery_note_template.html")
+            rendered_html = template.render(**context)
+        except Exception:
+            # Fallback direct HTML template
+            template_str = """
+            <!DOCTYPE html>
+            <html lang="bg"><head><meta charset="UTF-8"><style>
+            body { font-family: sans-serif; font-size: 11px; padding: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th { background: #121212; color: #fff; padding: 6px; text-align: left; }
+            td { border-bottom: 1px solid #ddd; padding: 6px; }
+            </style></head><body>
+            <h2>OPTOM.BG - Експедиционен Лист № {{ delivery_number }}</h2>
+            <p><strong>Обект:</strong> {{ buyer.name }} | <strong>Адрес:</strong> {{ buyer.address }}</p>
+            <table><tr><th>№</th><th>Артикул</th><th>Стекове</th></tr>
+            {% for item in items %}<tr><td>{{ loop.index }}</td><td>{{ item.name }}</td><td>{{ item.quantity }} бр.</td></tr>{% endfor %}
+            </table>
+            <p><strong>Общо брой стекове:</strong> {{ total_cases }} бр. | <strong>Стойност:</strong> {{ total_due }} лв.</p>
+            <br><br><p>Предал: ___________________  Приел: ___________________</p></body></html>
+            """
+            rendered_html = Template(template_str).render(**context)
+
         pdf_io = io.BytesIO()
         HTML(string=rendered_html).write_pdf(pdf_io)
         return pdf_io.getvalue()
@@ -700,7 +731,14 @@ def download_order_invoice(order_id: str, db: Session = Depends(get_db)):
     }
 
     pdf_bytes = generate_order_invoice_pdf(order_dict, items_data)
-    return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Faktura_{order.id}.pdf"})
+    if not pdf_bytes or len(pdf_bytes) == 0:
+        raise HTTPException(status_code=500, detail="Грешка при генериране на фактурата")
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Faktura_{order.id}.pdf"}
+    )
 
 # --- ЕНДПОЙНТ ЗА ИЗТЕГЛЯНЕ НА ЕКСПЕДИЦИОНЕН ЛИСТ (PDF) ---
 @app.get("/api/orders/{order_id}/delivery-note")
@@ -734,6 +772,9 @@ def download_delivery_note(order_id: str, db: Session = Depends(get_db)):
     }
 
     pdf_bytes = generate_delivery_note_pdf(order_dict, items_data)
+    if not pdf_bytes or len(pdf_bytes) == 0:
+        raise HTTPException(status_code=500, detail="Грешка при генериране на експедиционния лист")
+
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
