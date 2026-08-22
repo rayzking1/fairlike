@@ -5,6 +5,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import bcrypt
 import uuid
+import os
 
 from database import get_db
 import models
@@ -12,11 +13,11 @@ from schemas.auth import UserRegister, UserLogin, UserOut, TokenResponse, UserRo
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
-SECRET_KEY = "OPTOM_B2B_SECRET_KEY_CHANGE_IN_PRODUCTION"
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "OPTOM_B2B_SUPER_SECRET_PRODUCTION_KEY_2026")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt()
@@ -32,23 +33,24 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Липсва токен за автентикация",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     token = credentials.credentials
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Невалиден или изтекъл токен за достъп",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         if user_id is None:
-            raise credentials_exception
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалиден токен")
     except JWTError:
-        raise credentials_exception
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Невалиден или изтекъл токен")
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
-        raise credentials_exception
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Потребителят не е намерен")
     return user
 
 @router.post("/register", response_model=TokenResponse)

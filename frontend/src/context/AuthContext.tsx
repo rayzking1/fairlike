@@ -8,8 +8,6 @@ export interface User {
   role: "retailer" | "supplier" | "admin";
   company_name?: string;
   companyName?: string;
-  storeName?: string;
-  name?: string;
   eik?: string;
   mol?: string;
   address?: string;
@@ -17,80 +15,53 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
+  token: string | null;
   isAuthOpen: boolean;
   setIsAuthOpen: (open: boolean) => void;
-  login: (userDataOrEmail: User | string, roleOrCompany?: string) => void;
+  setAuthSession: (user: User, token: string) => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_STORAGE_KEY = "optom_b2b_session";
+const TOKEN_STORAGE_KEY = "optom_b2b_token";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
 
-  // 1. Автоматично възстановяване на сесията при първоначално зареждане
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY) || localStorage.getItem("b2b_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && parsed.email) {
-          setUser(parsed);
-        }
+      const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
+      const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+      if (storedUser && storedToken) {
+        setUser(JSON.parse(storedUser));
+        setToken(storedToken);
       }
     } catch (e) {
-      console.error("Грешка при четене на запазената сесия:", e);
-    } finally {
-      setIsInitialized(true);
+      console.error("Грешка при зареждане на сесията:", e);
     }
   }, []);
 
-  // 2. Вход и автоматично запазване в localStorage
-  const login = (userDataOrEmail: User | string, roleOrCompany?: string) => {
-    let finalUser: User;
-
-    if (typeof userDataOrEmail === "object") {
-      finalUser = userDataOrEmail;
-    } else {
-      const email = userDataOrEmail;
-      const role = (roleOrCompany === "supplier" ? "supplier" : "retailer") as "retailer" | "supplier";
-      const fallbackName = email.split("@")[0].toUpperCase();
-      
-      finalUser = {
-        email,
-        role,
-        company_name: `Търговски Обект (${fallbackName})`,
-        eik: "206894123",
-        mol: "Управител",
-        address: "гр. София, бул. България 1"
-      };
-    }
-
-    setUser(finalUser);
-    try {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(finalUser));
-      localStorage.setItem("b2b_user", JSON.stringify(finalUser));
-    } catch (e) {
-      console.error("Неуспешно записване на сесията:", e);
-    }
+  const setAuthSession = (userData: User, jwtToken: string) => {
+    setUser(userData);
+    setToken(jwtToken);
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
+    localStorage.setItem(TOKEN_STORAGE_KEY, jwtToken);
   };
 
-  // 3. Изход и изчистване на паметта
   const logout = () => {
     setUser(null);
-    try {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem("b2b_user");
-      localStorage.removeItem("auth_user");
-    } catch (e) {}
+    setToken(null);
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem("b2b_user");
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthOpen, setIsAuthOpen, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isAuthOpen, setIsAuthOpen, setAuthSession, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -98,8 +69,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 }

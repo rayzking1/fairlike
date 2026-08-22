@@ -17,12 +17,10 @@ import resend
 import models
 from database import engine, get_db, SessionLocal
 from routers.invoices import router as invoices_router
-from routers.auth import router as auth_router
+from routers.auth import router as auth_router, get_current_user
 
-# 1. Автоматично създаване на таблиците в PostgreSQL / SQLite
 models.Base.metadata.create_all(bind=engine)
 
-# 2. Инициализация на каталога, ако базата е празна
 def seed_initial_products():
     db = SessionLocal()
     if db.query(models.Product).count() == 0:
@@ -82,17 +80,15 @@ def seed_initial_products():
 
 seed_initial_products()
 
-# Конфигурация на Resend
-RESEND_API_KEY = os.getenv("RESEND_API_KEY", "re_JQPXCcuy_ECnHS76ZCUJg6XRwBPjc1P3G")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 resend.api_key = RESEND_API_KEY
 
-# Автоматично намиране на пътя до шаблоните
 current_dir = os.path.dirname(os.path.abspath(__file__))
 possible_template_paths = [
     os.path.join(current_dir, "templates"),
     os.path.join(current_dir, "..", "templates"),
     os.path.join(os.getcwd(), "templates"),
-    os.path.join(os.getcwd(), "backend", "app", "templates"),
+    os.path.join(os.getcwd(), "backend", "templates"),
 ]
 templates_dir = next((p for p in possible_template_paths if os.path.isdir(p)), os.path.join(current_dir, "templates"))
 jinja_env = Environment(loader=FileSystemLoader(templates_dir))
@@ -110,7 +106,6 @@ app.add_middleware(
 app.include_router(invoices_router)
 app.include_router(auth_router)
 
-# Pydantic схеми
 class ProductSchema(BaseModel):
     id: str
     name: str
@@ -122,6 +117,7 @@ class ProductSchema(BaseModel):
     casePrice: float
     rrpPrice: float
     imageUrl: str
+    supplier_id: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -130,7 +126,7 @@ class ProductCreate(BaseModel):
     name: str
     category: str
     barcode: str
-    supplierName: str
+    supplierName: Optional[str] = None
     supplierMinimum: Optional[float] = 50.0
     unitsPerCase: int
     casePrice: float
@@ -157,25 +153,14 @@ class CreateOrderRequest(BaseModel):
 class UpdateOrderStatusRequest(BaseModel):
     status: str
 
-# Помощна функция за генериране на PDF фактура в паметта
 def generate_order_invoice_pdf(order: models.Order, items_data: list) -> bytes:
     issue_date = date.today()
     payment_term = order.paymentTerms or "net60"
-    if payment_term == "net60":
-        due_date = issue_date + timedelta(days=60)
-        payment_label = "Net 60 дни"
-        doc_type = "B2B Фактура / Проформа"
-    elif payment_term == "net30":
-        due_date = issue_date + timedelta(days=30)
-        payment_label = "Net 30 дни"
-        doc_type = "B2B Фактура / Проформа"
-    else:
-        due_date = issue_date
-        payment_label = "Веднага (-2% отстъпка)"
-        doc_type = "B2B ДДС Фактура - Оригинал"
+    due_date = issue_date + timedelta(days=60 if payment_term == "net60" else (30 if payment_term == "net30" else 0))
+    payment_label = "Net 60 дни" if payment_term == "net60" else ("Net 30 дни" if payment_term == "net30" else "Веднага (-2% отстъпка)")
 
     context = {
-        "doc_type_label": doc_type,
+        "doc_type_label": "B2B Фактура / Проформа",
         "invoice_number": f"1000{order.id}",
         "issue_date": issue_date.strftime("%d.%m.%Y"),
         "tax_event_date": issue_date.strftime("%d.%m.%Y"),
@@ -214,222 +199,153 @@ def generate_order_invoice_pdf(order: models.Order, items_data: list) -> bytes:
     HTML(string=rendered_html).write_pdf(pdf_io)
     return pdf_io.getvalue()
 
-# Функция за изпращане по имейл във фонов режим
 def send_order_confirmation_email(order_dict: dict, items_data: list):
+    active_key = os.getenv("RESEND_API_KEY", "")
+    if not active_key:
+        return
+    resend.api_key = active_key
     try:
-        payment_term = order_dict.get("paymentTerms", "net60")
-        payment_label = (
-            "Net 60 дни" if payment_term == "net60"
-            else "Net 30 дни" if payment_term == "net30"
-            else "Веднага (-2% отстъпка)"
-        )
+        class DummyOrder:
+            pass
+        dummy = DummyOrder()
+        for k, v in order_dict.items():
+            setattr(dummy, k, v)
+        pdf_bytes = generate_order_invoice_pdf(dummy, items_data)
 
-        pdf_bytes = None
-        try:
-            # Пресъздаване на фиктивен Order обект за PDF функцията
-            class DummyOrder:
-                pass
-            dummy = DummyOrder()
-            dummy.id = order_dict["id"]
-            dummy.storeName = order_dict["storeName"]
-            dummy.invoiceEmail = order_dict["invoiceEmail"]
-            dummy.address = order_dict["address"]
-            dummy.eik = order_dict.get("eik")
-            dummy.paymentTerms = order_dict.get("paymentTerms")
-            dummy.subtotal = order_dict["subtotal"]
-            dummy.vat = order_dict["vat"]
-            dummy.total = order_dict["total"]
+        items_html = "".join([
+            f"<tr><td style='padding: 8px; border-bottom: 1px solid #e2e8f0;'><strong>{it.get('name', 'Стек')}</strong></td>"
+            f"<td style='padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center;'>{it.get('quantity', 1)} бр.</td>"
+            f"<td style='padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: monospace;'>{it.get('total_price', 0):.2f} лв.</td></tr>"
+            for it in items_data
+        ])
 
-            pdf_bytes = generate_order_invoice_pdf(dummy, items_data)
-        except Exception as pdf_err:
-            print(f"⚠️ Грешка при PDF генерацията: {str(pdf_err)}")
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; color: #0f172a; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px;">
+            <h2>Потвърждение за заявка #{order_dict['id']} - OPTOM.BG</h2>
+            <p>Обект: <strong>{order_dict['storeName']}</strong></p>
+            <p>Адрес: {order_dict['address']}</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">{items_html}</table>
+            <p style="font-size: 16px; font-weight: bold;">Общо с ДДС: {order_dict['total']:.2f} лв.</p>
+        </div>
+        """
 
         email_params = {
             "from": "OPTOM.BG <onboarding@resend.dev>",
             "to": [order_dict["invoiceEmail"]],
-            "subject": f"Потвърждение за поръчка #{order_dict['id']} - OPTOM.BG",
-            "html": f"""
-                <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: auto;">
-                    <h2 style="color: #2563eb;">Здравейте, {order_dict['storeName']}!</h2>
-                    <p>Вашата поръчка с номер <strong>#{order_dict['id']}</strong> беше приета успешно в платформата <strong>OPTOM.BG</strong>.</p>
-                    <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #e2e8f0;">
-                        <p style="margin: 4px 0;"><strong>Адрес за доставка:</strong> {order_dict['address']}</p>
-                        <p style="margin: 4px 0;"><strong>Условия на плащане:</strong> {payment_label}</p>
-                        <p style="margin: 4px 0;"><strong>Обща стойност с ДДС:</strong> {order_dict['total']:.2f} лв.</p>
-                    </div>
-                    <p>Оригиналната PDF фактура/проформа е прикачена към този имейл.</p>
-                    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-                    <small style="color: #64748b;">OPTOM.BG &bull; Платформа за презареждане на търговски обекти</small>
-                </div>
-            """
+            "subject": f"Потвърждение за зареждане #{order_dict['id']} - OPTOM.BG",
+            "html": html_content,
+            "attachments": [{"filename": f"Faktura_{order_dict['id']}.pdf", "content": list(pdf_bytes)}] if pdf_bytes else []
         }
-
-        if pdf_bytes:
-            email_params["attachments"] = [
-                {
-                    "filename": f"Faktura_{order_dict['id']}.pdf",
-                    "content": list(pdf_bytes)
-                }
-            ]
-
         resend.Emails.send(email_params)
-        print(f"✅ Успешно изпратен имейл за поръчка #{order_dict['id']}")
     except Exception as e:
-        print(f"❌ Грешка при изпращане на имейл: {str(e)}")
-
-# --- ЕНДПОЙНТИ ---
+        print(f"Resend error: {e}")
 
 @app.get("/")
 def root():
     return {"message": "OPTOM.BG Database API is running", "docs": "/docs"}
 
-
 @app.get("/api/products/search")
 def search_products(q: str = "", db: Session = Depends(get_db)):
-    """Live B2B търсене по име, баркод, доставчик или категория"""
     if not q or len(q.strip()) == 0:
         return []
-    
     search_term = f"%{q.strip().lower()}%"
-    results = db.query(models.Product).filter(
+    return db.query(models.Product).filter(
         (func.lower(models.Product.name).like(search_term)) |
         (func.lower(models.Product.barcode).like(search_term)) |
         (func.lower(models.Product.supplierName).like(search_term)) |
         (func.lower(models.Product.category).like(search_term))
     ).limit(10).all()
-    
-    return results
 
 @app.get("/api/products", response_model=List[ProductSchema])
-def get_products(db: Session = Depends(get_db)):
-    """Връща списък с всички артикули от базата данни"""
-    return db.query(models.Product).order_by(models.Product.name.asc()).all()
+def get_products(supplier_only: bool = False, current_user: Optional[models.User] = Depends(get_current_user), db: Session = Depends(get_db)):
+    query = db.query(models.Product)
+    if supplier_only and current_user and current_user.role == "supplier":
+        query = query.filter((models.Product.supplier_id == current_user.id) | (models.Product.supplierName == current_user.company_name))
+    return query.order_by(models.Product.name.asc()).all()
 
 @app.post("/api/products", response_model=ProductSchema)
-def add_product(item: ProductCreate, db: Session = Depends(get_db)):
-    """Записва нов артикул директно в таблицата products"""
+def add_product(item: ProductCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "supplier":
+        raise HTTPException(status_code=403, detail="Само производители/доставчици могат да добавят артикули")
+
     new_product = models.Product(
         id=str(uuid.uuid4())[:8],
         name=item.name,
         category=item.category,
         barcode=item.barcode,
-        supplierName=item.supplierName,
+        supplierName=current_user.company_name or item.supplierName or "Официален Дистрибутор",
         supplierMinimum=item.supplierMinimum or 50.0,
         unitsPerCase=item.unitsPerCase,
         casePrice=item.casePrice,
         rrpPrice=item.rrpPrice,
         imageUrl=item.imageUrl or "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80",
+        supplier_id=current_user.id
     )
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
     return new_product
 
-@app.get("/api/products/{barcode}", response_model=ProductSchema)
-def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
-    """Търсене на продукт по баркод в базата"""
-    product = db.query(models.Product).filter(models.Product.barcode == barcode).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Продуктът не е намерен")
-    return product
-
 @app.post("/api/products/import")
 async def import_products(
     file: UploadFile = File(...),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Масов импорт на артикули от Excel (.xlsx, .xls) или CSV файл.
-    """
-    filename_lower = file.filename.lower() if file.filename else ""
-    if not (filename_lower.endswith(".csv") or filename_lower.endswith(".xlsx") or filename_lower.endswith(".xls")):
-        raise HTTPException(status_code=400, detail="Моля, качете валиден .csv или .xlsx файл.")
+    if current_user.role != "supplier":
+        raise HTTPException(status_code=403, detail="Само производители могат да импортират ценови листи")
 
     contents = await file.read()
-    
     try:
-        if filename_lower.endswith(".csv"):
+        if file.filename.endswith(".csv"):
             df = pd.read_csv(io.BytesIO(contents))
         else:
             df = pd.read_excel(io.BytesIO(contents))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Грешка при четене на файла: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Грешка при четене: {e}")
 
     df.columns = [str(col).strip().lower().replace(" ", "_") for col in df.columns]
-
-    required_cols = {"name", "category", "barcode", "units_per_case", "case_price", "rrp_price"}
-    missing = required_cols - set(df.columns)
-    if missing:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Липсват задължителни колони във файла: {', '.join(missing)}"
-        )
-
-    imported_count = 0
-    updated_count = 0
+    imported, updated = 0, 0
 
     for _, row in df.iterrows():
-        barcode_raw = str(row["barcode"]).strip()
-        if barcode_raw.endswith(".0"):
-            barcode_raw = barcode_raw[:-2]
-
-        if not barcode_raw or barcode_raw == "nan":
+        bcode = str(row.get("barcode", "")).replace(".0", "").strip()
+        if not bcode:
             continue
-
-        existing_prod = db.query(models.Product).filter(models.Product.barcode == barcode_raw).first()
-
-        if existing_prod:
-            existing_prod.name = str(row["name"]).strip()
-            existing_prod.category = str(row["category"]).strip()
-            existing_prod.unitsPerCase = int(row["units_per_case"])
-            existing_prod.casePrice = float(row["case_price"])
-            existing_prod.rrpPrice = float(row["rrp_price"])
-            if "supplier_name" in row and not pd.isna(row["supplier_name"]):
-                existing_prod.supplierName = str(row["supplier_name"]).strip()
-            if "supplier_minimum" in row and not pd.isna(row["supplier_minimum"]):
-                existing_prod.supplierMinimum = float(row["supplier_minimum"])
-            if "image_url" in row and not pd.isna(row["image_url"]):
-                existing_prod.imageUrl = str(row["image_url"]).strip()
-            updated_count += 1
+        prod = db.query(models.Product).filter(models.Product.barcode == bcode).first()
+        if prod:
+            prod.name = str(row.get("name", prod.name)).strip()
+            prod.casePrice = float(row.get("case_price", prod.casePrice))
+            prod.rrpPrice = float(row.get("rrp_price", prod.rrpPrice))
+            prod.unitsPerCase = int(row.get("units_per_case", prod.unitsPerCase))
+            updated += 1
         else:
-            new_prod = models.Product(
+            new_p = models.Product(
                 id=str(uuid.uuid4())[:8],
-                name=str(row["name"]).strip(),
-                category=str(row["category"]).strip(),
-                barcode=barcode_raw,
-                supplierName=str(row.get("supplier_name", "Официален Дистрибутор")).strip(),
-                supplierMinimum=float(row.get("supplier_minimum", 50.0)) if not pd.isna(row.get("supplier_minimum")) else 50.0,
-                unitsPerCase=int(row["units_per_case"]),
-                casePrice=float(row["case_price"]),
-                rrpPrice=float(row["rrp_price"]),
-                imageUrl=str(row.get("image_url", "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80")).strip()
+                name=str(row.get("name", "Артикул")).strip(),
+                category=str(row.get("category", "Храни")).strip(),
+                barcode=bcode,
+                supplierName=current_user.company_name,
+                supplierMinimum=float(row.get("supplier_minimum", 50.0)),
+                unitsPerCase=int(row.get("units_per_case", 24)),
+                casePrice=float(row.get("case_price", 20.0)),
+                rrpPrice=float(row.get("rrp_price", 25.0)),
+                supplier_id=current_user.id
             )
-            db.add(new_prod)
-            imported_count += 1
-
+            db.add(new_p)
+            imported += 1
     db.commit()
-
-    return {
-        "status": "success",
-        "imported": imported_count,
-        "updated": updated_count,
-        "message": f"Успешно обработени: {imported_count} нови артикула, {updated_count} обновени."
-    }
+    return {"status": "success", "imported": imported, "updated": updated}
 
 @app.get("/api/orders")
-def get_orders(email: Optional[str] = None, db: Session = Depends(get_db)):
-    """
-    Връща списък с поръчки. 
-    Ако е подаден параметър ?email=..., връща само поръчките на съответния купувач.
-    """
+def get_orders(current_user: Optional[models.User] = Depends(get_current_user), db: Session = Depends(get_db)):
     query = db.query(models.Order)
-    if email:
-        query = query.filter(models.Order.invoiceEmail == email)
+    if current_user:
+        if current_user.role == "retailer":
+            query = query.filter((models.Order.user_id == current_user.id) | (models.Order.invoiceEmail == current_user.email))
     return query.order_by(models.Order.created_at.desc()).all()
 
 @app.post("/api/orders")
-def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Записва поръчката и редовете в SQL базата и изпраща фактура по имейл"""
+def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks, current_user: Optional[models.User] = Depends(get_current_user), db: Session = Depends(get_db)):
     order_id = str(uuid.uuid4())[:8].upper()
     db_order = models.Order(
         id=order_id,
@@ -442,7 +358,8 @@ def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks
         vat=order_in.vat,
         total=order_in.total,
         estimatedProfit=order_in.estimatedProfit,
-        status="pending_delivery"
+        status="pending_delivery",
+        user_id=current_user.id if current_user else None
     )
     db.add(db_order)
 
@@ -455,7 +372,6 @@ def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks
             case_price=it.casePrice
         )
         db.add(db_item)
-
         prod = db.query(models.Product).filter(models.Product.id == it.productId).first()
         items_data.append({
             "name": prod.name if prod else f"Артикул #{it.productId}",
@@ -483,16 +399,10 @@ def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks
     }
 
     background_tasks.add_task(send_order_confirmation_email, order_dict, items_data)
-
-    return {
-        "status": "success",
-        "orderId": order_id,
-        "message": "Поръчката е запазена в базата данни и е изпратена фактура по имейл."
-    }
+    return {"status": "success", "orderId": order_id}
 
 @app.get("/api/orders/{order_id}/invoice")
 def download_order_invoice(order_id: str, db: Session = Depends(get_db)):
-    """Генерира и връща оригиналната PDF фактура за директно сваляне в браузъра"""
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Поръчката не е намерена")
@@ -512,27 +422,7 @@ def download_order_invoice(order_id: str, db: Session = Depends(get_db)):
         })
 
     pdf_bytes = generate_order_invoice_pdf(order, items_data)
-    pdf_stream = io.BytesIO(pdf_bytes)
-
-    return StreamingResponse(
-        pdf_stream,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=Faktura_{order.id}.pdf"}
-    )
-
-@app.patch("/api/orders/{order_id}/status")
-def update_order_status(order_id: str, payload: UpdateOrderStatusRequest, db: Session = Depends(get_db)):
-    """Обновява статуса на поръчката (напр. 'shipped', 'delivered')"""
-    order = db.query(models.Order).filter(models.Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Поръчката не е намерена")
-
-    order.status = payload.status
-    db.commit()
-    return {"status": "success", "orderId": order_id, "newStatus": payload.status}
-
-
-# --- Управление на артикули (Редакция и Изтриване) ---
+    return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Faktura_{order.id}.pdf"})
 
 class UpdateProductRequest(BaseModel):
     casePrice: Optional[float] = None
@@ -541,19 +431,17 @@ class UpdateProductRequest(BaseModel):
     supplierMinimum: Optional[float] = None
 
 @app.patch("/api/products/{product_id}")
-def update_product(product_id: str, payload: UpdateProductRequest, db: Session = Depends(get_db)):
-    """Обновява цени, наличност или MOQ на артикул"""
+def update_product(product_id: str, payload: UpdateProductRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Продуктът не е намерен")
+    if product.supplier_id and product.supplier_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Нямате права да редактирате артикул на друг производител")
 
     if payload.casePrice is not None:
         product.casePrice = payload.casePrice
     if payload.rrpPrice is not None:
         product.rrpPrice = payload.rrpPrice
-    if payload.inStock is not None:
-        if hasattr(product, "inStock"):
-            product.inStock = payload.inStock
     if payload.supplierMinimum is not None:
         product.supplierMinimum = payload.supplierMinimum
 
@@ -562,11 +450,12 @@ def update_product(product_id: str, payload: UpdateProductRequest, db: Session =
     return {"status": "success", "product": product}
 
 @app.delete("/api/products/{product_id}")
-def delete_product(product_id: str, db: Session = Depends(get_db)):
-    """Трайно изтрива артикул от каталога"""
+def delete_product(product_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Продуктът не е намерен")
+    if product.supplier_id and product.supplier_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Нямате права да изтриете артикул на друг производител")
 
     db.delete(product)
     db.commit()
