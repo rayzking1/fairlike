@@ -299,6 +299,54 @@ def trigger_direct_email(order_dict: dict, items_data: list):
     except Exception as e:
         print(f"Resend error: {e}")
 
+def trigger_status_email(order: models.Order, status_code: str):
+    active_key = os.getenv("RESEND_API_KEY", "")
+    if not active_key or not order.invoiceEmail:
+        return
+    resend.api_key = active_key
+
+    status_labels = {
+        "processing": ("В подготовка", "#f59e0b", "Вашата поръчка се подготвя и комплектова в склада на доставчика."),
+        "shipped": ("Натоварена / Пътува", "#2563eb", "Вашата поръчка беше натоварена и пътува към вашия търговски обект."),
+        "delivered": ("Доставена", "#16a34a", "Вашата поръчка беше успешно доставена на посочения адрес."),
+        "pending": ("Приета", "#64748b", "Вашата поръчка е приета от доставчика.")
+    }
+
+    title, color, desc = status_labels.get(
+        status_code,
+        (status_code, "#0f172a", f"Статусът на вашата поръчка беше обновен на: {status_code}")
+    )
+
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; color: #0f172a; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px;">
+        <h1 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 900;">OPTOM<span style="color: #059669;">.BG</span></h1>
+        <div style="background-color: #f8fafc; border-left: 4px solid {color}; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+            <p style="margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase; font-weight: bold; color: {color};">Обновен статус на заявка</p>
+            <h2 style="margin: 0; font-size: 18px; color: #0f172a;">{title}</h2>
+        </div>
+        <p style="font-size: 14px; line-height: 1.5;">Здравейте, <strong>{order.storeName}</strong>,</p>
+        <p style="font-size: 14px; line-height: 1.5;">{desc}</p>
+        <div style="margin: 20px 0; padding: 16px; background-color: #f1f5f9; border-radius: 8px; font-size: 13px;">
+            <p style="margin: 0 0 6px 0;"><strong>№ на поръчка:</strong> #{order.id}</p>
+            <p style="margin: 0 0 6px 0;"><strong>Адрес за доставка:</strong> {order.address}</p>
+            <p style="margin: 0;"><strong>Обща стойност с ДДС:</strong> {order.total:.2f} лв.</p>
+        </div>
+        <p style="font-size: 12px; color: #64748b; margin-top: 24px;">Можете да прегледате детайлите и фактурите във вашия B2B профил в OPTOM.BG.</p>
+    </div>
+    """
+
+    email_params = {
+        "from": "OPTOM.BG <onboarding@resend.dev>",
+        "to": [order.invoiceEmail],
+        "subject": f"Статус на поръчка #{order.id}: {title} - OPTOM.BG",
+        "html": html_content
+    }
+
+    try:
+        resend.Emails.send(email_params)
+    except Exception as e:
+        print(f"Status email error: {e}")
+
 @app.get("/")
 def root():
     return {"message": "OPTOM.BG Database API is running", "docs": "/docs"}
@@ -353,7 +401,7 @@ def get_orders(email: Optional[str] = None, current_user: Optional[models.User] 
     return query.order_by(models.Order.created_at.desc()).all()
 
 @app.post("/api/orders")
-def create_order(order_in: CreateOrderRequest, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
     order_id = str(uuid.uuid4())[:8].upper()
     db_order = models.Order(
         id=order_id,
@@ -366,7 +414,7 @@ def create_order(order_in: CreateOrderRequest, current_user: Optional[models.Use
         vat=order_in.vat,
         total=order_in.total,
         estimatedProfit=order_in.estimatedProfit,
-        status="pending_delivery",
+        status="pending",
         user_id=current_user.id if current_user else None
     )
     db.add(db_order)
@@ -387,7 +435,7 @@ def create_order(order_in: CreateOrderRequest, current_user: Optional[models.Use
             "ean": prod.barcode if prod else "N/A",
             "quantity": it.quantityCases,
             "unit": "стека",
-            "unit_price": it.case_price,
+            "unit_price": it.casePrice,
             "total_price": round(it.quantityCases * it.casePrice, 2)
         })
 
@@ -406,8 +454,23 @@ def create_order(order_in: CreateOrderRequest, current_user: Optional[models.Use
         "total": db_order.total,
     }
 
-    trigger_direct_email(order_dict, items_data)
+    background_tasks.add_task(trigger_direct_email, order_dict, items_data)
     return {"status": "success", "orderId": order_id}
+
+@app.patch("/api/orders/{order_id}/status")
+def update_order_status(order_id: str, payload: UpdateOrderStatusRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Поръчката не е намерена")
+
+    order.status = payload.status
+    db.commit()
+    db.refresh(order)
+
+    # Фоново изпращане на имейл нотификация към магазина при смяна на статуса
+    background_tasks.add_task(trigger_status_email, order, payload.status)
+
+    return {"status": "success", "order_id": order.id, "new_status": order.status}
 
 @app.get("/api/orders/{order_id}/invoice")
 def download_order_invoice(order_id: str, db: Session = Depends(get_db)):
