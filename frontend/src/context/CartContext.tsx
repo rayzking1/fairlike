@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 export interface CartProduct {
   id: string;
@@ -37,29 +38,26 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [items, setItems] = useState<CartItem[]>([]);
 
-  // Зареждане от localStorage при първоначално отваряне
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("optom_cart");
-      if (saved) {
-        setItems(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.error("Грешка при зареждане на количката от localStorage:", e);
-    }
-  }, []);
+  const storageKey = user?.email ? `optom_cart_${user.email.toLowerCase()}` : "optom_cart_guest";
 
-  // Запазване в localStorage при всяка промяна
   useEffect(() => {
     try {
-      localStorage.setItem("optom_cart", JSON.stringify(items));
+      const saved = localStorage.getItem(storageKey);
+      setItems(saved ? JSON.parse(saved) : []);
     } catch (e) {
-      console.error("Грешка при запис на количката в localStorage:", e);
+      setItems([]);
     }
-  }, [items]);
+  }, [storageKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(items));
+    } catch (e) {}
+  }, [items, storageKey]);
 
   const addToCart = (product: CartProduct, cases: number = 1) => {
     setItems((prev) => {
@@ -76,7 +74,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setIsCartOpen(true);
   };
 
-  // Слушател за добавяне от външни компоненти (напр. LiveSearch)
   useEffect(() => {
     const handleGlobalAddToCart = (event: Event) => {
       const customEvent = event as CustomEvent<CartProduct>;
@@ -84,11 +81,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         addToCart(customEvent.detail, 1);
       }
     };
-
     window.addEventListener("optom:add-to-cart", handleGlobalAddToCart);
-    return () => {
-      window.removeEventListener("optom:add-to-cart", handleGlobalAddToCart);
-    };
+    return () => window.removeEventListener("optom:add-to-cart", handleGlobalAddToCart);
   }, []);
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -111,19 +105,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems([]);
   };
 
-  // Изчисления
-  const cartTotal = items.reduce(
-    (sum, it) => sum + it.quantityCases * it.product.casePrice,
-    0
-  );
+  const cartTotal = items.reduce((sum, it) => sum + it.quantityCases * it.product.casePrice, 0);
   const vatAmount = cartTotal * 0.20;
   const grandTotal = cartTotal + vatAmount;
-
-  // Прогнозен марж: (RRP * бройки в стек - цена на стек) * поръчани стекове
   const estimatedTotalProfit = items.reduce((sum, it) => {
-    const revenuePerCase = it.product.rrpPrice * it.product.unitsPerCase;
-    const profitPerCase = Math.max(0, revenuePerCase - it.product.casePrice);
-    return sum + profitPerCase * it.quantityCases;
+    const revenue = it.product.rrpPrice * it.product.unitsPerCase;
+    const profit = Math.max(0, revenue - it.product.casePrice);
+    return sum + profit * it.quantityCases;
   }, 0);
 
   return (
@@ -149,8 +137,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
 export function useCart() {
   const context = useContext(CartContext);
-  if (!context) {
-    throw new Error("useCart must be used within a CartProvider");
-  }
+  if (!context) throw new Error("useCart must be used within a CartProvider");
   return context;
 }
