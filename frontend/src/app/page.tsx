@@ -10,8 +10,7 @@ import {
   Lock, 
   Star,
   Plus,
-  Minus,
-  ArrowUpRight
+  Minus
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
@@ -163,7 +162,7 @@ export default function HomePage() {
             onClick={() => setIsAuthOpen(true)}
             className="font-semibold text-[#121212] underline ml-1 cursor-pointer hover:text-black"
           >
-            Вход / Регистрация за обекти
+            Вход / Регистрация
           </button>
         )}
       </div>
@@ -180,14 +179,7 @@ export default function HomePage() {
             <LiveSearch />
           </div>
 
-          <div className="flex items-center gap-4">
-            <Link 
-              href="/supplier" 
-              className="text-xs font-medium text-[#525252] hover:text-[#121212] transition-colors hidden sm:inline"
-            >
-              Вход за фабрики & вносители
-            </Link>
-
+          <div className="flex items-center gap-3">
             <HeaderAuthButton />
 
             {!isSupplier && (
@@ -228,7 +220,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* 3. HERO EDITORIAL SECTION (FMCG WAREHOUSE & RETAIL) */}
+      {/* 3. HERO EDITORIAL SECTION */}
       <section className="max-w-[1360px] mx-auto px-4 sm:px-8 py-6">
         <div className="relative rounded-2xl overflow-hidden min-h-[460px] flex items-center bg-[#2B2825]">
           <img 
@@ -250,15 +242,15 @@ export default function HomePage() {
                 onClick={() => user ? document.getElementById("catalog-grid")?.scrollIntoView({ behavior: "smooth" }) : setIsAuthOpen(true)}
                 className="px-6 py-3 bg-[#121212] hover:bg-neutral-800 text-white rounded-md text-xs font-semibold tracking-wide transition-all text-center cursor-pointer shadow-sm"
               >
-                {user ? "Към каталога със стекове" : "Вход за търговски обекти"}
+                {user ? "Към каталога със стекове" : "Вход / Регистрация"}
               </button>
             </div>
 
             <p className="text-[11px] text-[#737373] pt-1">
               Официален производител сте?{" "}
-              <Link href="/supplier" className="underline font-medium text-[#121212] hover:text-black">
+              <button onClick={() => setIsAuthOpen(true)} className="underline font-medium text-[#121212] hover:text-black cursor-pointer">
                 Качете ценоразписа си
-              </Link>
+              </button>
             </p>
           </div>
         </div>
@@ -471,7 +463,7 @@ export default function HomePage() {
                               </>
                             ) : (
                               <>
-                                <ShoppingBag className="w-3 h-3" /> Добави {(qty * effectivePrice).toFixed(2)} лв.
+                                <ShoppingBag className="w-3.5 h-3.5" /> Добави {(qty * effectivePrice).toFixed(2)} лв.
                               </>
                             )}
                           </button>
