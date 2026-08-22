@@ -16,15 +16,16 @@ import {
   FileSpreadsheet, 
   Save, 
   Check, 
-  AlertCircle,
-  FileUp,
-  Trash2,
-  Edit2,
-  Search,
-  CheckCircle,
-  XCircle,
+  AlertCircle, 
+  FileUp, 
+  Trash2, 
+  Edit2, 
+  Search, 
+  CheckCircle, 
+  XCircle, 
   Boxes,
-  FileDown
+  FileDown,
+  Percent
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
@@ -68,18 +69,22 @@ export default function SupplierDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
 
-  // Филтриране и търсене в каталога на доставчика
   const [catalogSearch, setCatalogSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editCasePrice, setEditCasePrice] = useState<number>(0);
-  const [editRrpPrice, setEditRrpPrice] = useState<number>(0);
+  const [editForm, setEditForm] = useState({
+    casePrice: 0,
+    rrpPrice: 0,
+    hasTieredDiscount: true,
+    tier1Qty: 5,
+    tier1Discount: 5.0,
+    tier2Qty: 10,
+    tier2Discount: 10.0
+  });
   const [savingEdit, setSavingEdit] = useState(false);
 
-  // MOQ праг
   const [brandMoq, setBrandMoq] = useState<number>(50);
   const [moqSaved, setMoqSaved] = useState(false);
 
-  // Ръчно добавяне на стек
   const [newProduct, setNewProduct] = useState({
     name: "",
     barcode: "",
@@ -87,12 +92,15 @@ export default function SupplierDashboardPage() {
     rrpPrice: "",
     unitsPerCase: "24",
     category: "Напитки",
-    imageUrl: ""
+    imageUrl: "",
+    hasTieredDiscount: true,
+    tier1Qty: "5",
+    tier1Discount: "5.0",
+    tier2Qty: "10",
+    tier2Discount: "10.0"
   });
   const [productSaving, setProductSaving] = useState(false);
-  const [productSuccess, setProductSuccess] = useState(false);
 
-  // Масов импорт
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -139,29 +147,30 @@ export default function SupplierDashboardPage() {
     fetchDashboardData();
   }, []);
 
-  // Филтрирани продукти на този доставчик
+  // Филтрация единствено и само за артикулите на конкретния доставчик
   const supplierProducts = useMemo(() => {
-    const userCompany = (user?.company_name || user?.companyName || "").trim().toLowerCase();
+    const rawCompany = (user?.company_name || user?.companyName || "").trim().toLowerCase();
     
     return products.filter((p) => {
+      const pSupplier = (p.supplierName || "").trim().toLowerCase();
+      
+      const isOwner = rawCompany
+        ? pSupplier.includes(rawCompany) || rawCompany.includes(pSupplier)
+        : true;
+
       const matchesSearch = 
         p.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
         p.barcode.includes(catalogSearch) ||
         p.category.toLowerCase().includes(catalogSearch.toLowerCase());
-      
-      // Ако потребителят е доставчик с конкретно име, филтрираме артикулите му, в противен случай показваме каталога
-      const matchesSupplier = !userCompany || p.supplierName.toLowerCase().includes(userCompany) || userCompany.includes(p.supplierName.toLowerCase()) || true;
 
-      return matchesSearch && matchesSupplier;
+      return isOwner && matchesSearch;
     });
   }, [products, catalogSearch, user]);
 
-  // Филтрирани поръчки за този доставчик
   const supplierOrders = useMemo(() => {
     return orders;
   }, [orders]);
 
-  // Експорт на поръчките в Excel файл за складова обработка
   const handleExportOrdersToExcel = () => {
     if (supplierOrders.length === 0) {
       alert("Няма налични поръчки за експорт.");
@@ -193,14 +202,19 @@ export default function SupplierDashboardPage() {
     XLSX.writeFile(wb, `OPTOM_Porachki_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  // Започване на редакция на продукт
   const handleStartEdit = (prod: ProductItem) => {
     setEditingId(prod.id);
-    setEditCasePrice(prod.casePrice);
-    setEditRrpPrice(prod.rrpPrice);
+    setEditForm({
+      casePrice: prod.casePrice,
+      rrpPrice: prod.rrpPrice,
+      hasTieredDiscount: prod.hasTieredDiscount !== false,
+      tier1Qty: prod.tier1Qty || 5,
+      tier1Discount: prod.tier1Discount || 5.0,
+      tier2Qty: prod.tier2Qty || 10,
+      tier2Discount: prod.tier2Discount || 10.0
+    });
   };
 
-  // Запазване на промените по цените
   const handleSavePrice = async (prodId: string) => {
     setSavingEdit(true);
     const baseUrl = getApiBaseUrl();
@@ -208,31 +222,20 @@ export default function SupplierDashboardPage() {
       await fetch(`${baseUrl}/api/products/${prodId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          casePrice: editCasePrice,
-          rrpPrice: editRrpPrice
-        })
+        body: JSON.stringify(editForm)
       });
 
       setProducts((prev) =>
-        prev.map((p) =>
-          p.id === prodId ? { ...p, casePrice: editCasePrice, rrpPrice: editRrpPrice } : p
-        )
+        prev.map((p) => (p.id === prodId ? { ...p, ...editForm } : p))
       );
       setEditingId(null);
     } catch (e) {
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === prodId ? { ...p, casePrice: editCasePrice, rrpPrice: editRrpPrice } : p
-        )
-      );
       setEditingId(null);
     } finally {
       setSavingEdit(false);
     }
   };
 
-  // Превключване на наличност
   const handleToggleStock = async (prodId: string, currentStock: boolean) => {
     const nextStock = !currentStock;
     const baseUrl = getApiBaseUrl();
@@ -249,18 +252,15 @@ export default function SupplierDashboardPage() {
     );
   };
 
-  // Изтриване на артикул
   const handleDeleteProduct = async (prodId: string) => {
-    if (!confirm("Сигурни ли сте, че искате да изтриете този артикул от каталога?")) return;
+    if (!confirm("Сигурни ли сте, че искате да изтриете този артикул?")) return;
     const baseUrl = getApiBaseUrl();
     try {
       await fetch(`${baseUrl}/api/products/${prodId}`, { method: "DELETE" });
     } catch (e) {}
-
     setProducts((prev) => prev.filter((p) => p.id !== prodId));
   };
 
-  // Запазване на Brand MOQ за всички артикули на доставчика
   const handleSaveMoq = async () => {
     setMoqSaved(true);
     const baseUrl = getApiBaseUrl();
@@ -276,7 +276,6 @@ export default function SupplierDashboardPage() {
     setTimeout(() => setMoqSaved(false), 2000);
   };
 
-  // Обработка на Excel файл
   const processExcelFile = (file: File) => {
     setFileName(file.name);
     setImportStatus(null);
@@ -307,12 +306,12 @@ export default function SupplierDashboardPage() {
             rrpPrice: parseFloat(String(row[3] || "0").replace(",", ".")) || 28,
             unitsPerCase: parseInt(String(row[4] || "24"), 10) || 24,
             category: String(row[5] || "Напитки").trim(),
-            imageUrl: String(row[6] || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500").trim()
+            imageUrl: String(row[6] || "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80").trim()
           });
         }
         setParsedRows(extracted);
       } catch (err) {
-        alert("Възникна грешка при разчитането на файла. Уверете се, че е валиден .xlsx, .xls или .csv файл.");
+        alert("Грешка при четене на файла.");
       }
     };
     reader.readAsArrayBuffer(file);
@@ -355,7 +354,7 @@ export default function SupplierDashboardPage() {
       } catch (e) {}
     }
 
-    setImportStatus(`Успешно импортирани ${successCount} от ${parsedRows.length} артикула!`);
+    setImportStatus(`Успешно импортирани ${successCount} артикула!`);
     setImporting(false);
     setParsedRows([]);
     setFileName(null);
@@ -391,18 +390,14 @@ export default function SupplierDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 antialiased">
-      {/* Хедър */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 h-20 flex items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <Link 
-              href="/"
-              className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
-            >
+            <Link href="/" className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900">
               <ChevronLeft className="w-4 h-4" /> Каталог
             </Link>
             <div className="h-4 w-px bg-slate-200" />
-            <Link href="/" className="flex items-center gap-2 group">
+            <Link href="/" className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black text-sm">
                 O
               </div>
@@ -411,14 +406,10 @@ export default function SupplierDashboardPage() {
               </span>
             </Link>
           </div>
-
-          <div className="flex items-center gap-3">
-            <HeaderAuthButton />
-          </div>
+          <HeaderAuthButton />
         </div>
       </header>
 
-      {/* Hero банер */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
@@ -427,21 +418,13 @@ export default function SupplierDashboardPage() {
                 <Building2 className="w-8 h-8 text-emerald-400" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-black text-slate-950">
-                    {user?.company_name || user?.companyName || "Панел на Производител"}
-                  </h1>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                    Официален доставчик
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Управлявайте заводските квоти, наличностите, ценоразписа и поръчките от магазини.
-                </p>
+                <h1 className="text-2xl font-black text-slate-950">
+                  {user?.company_name || user?.companyName || "Панел на Производител"}
+                </h1>
+                <p className="text-xs text-slate-500 mt-0.5">Управлявайте ценоразписа, наличностите и обемните отстъпки.</p>
               </div>
             </div>
 
-            {/* Бърза настройка на MOQ */}
             <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-3 rounded-2xl">
               <div>
                 <p className="text-[10px] font-bold uppercase text-slate-500">Минимум за поръчка (MOQ):</p>
@@ -450,12 +433,12 @@ export default function SupplierDashboardPage() {
                     type="number"
                     value={brandMoq}
                     onChange={(e) => setBrandMoq(Number(e.target.value))}
-                    className="w-20 px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-20 px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none"
                   />
                   <span className="text-xs font-bold text-slate-600">лв.</span>
                   <button
                     onClick={handleSaveMoq}
-                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
                   >
                     {moqSaved ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Save className="w-3.5 h-3.5" />}
                     <span>Запази</span>
@@ -465,14 +448,11 @@ export default function SupplierDashboardPage() {
             </div>
           </div>
 
-          {/* Табове за навигация */}
           <div className="flex items-center gap-2 mt-8 border-b border-slate-100 -mb-8 pb-3 overflow-x-auto">
             <button
               onClick={() => setActiveTab("catalog")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 ${
-                activeTab === "catalog"
-                  ? "bg-slate-950 text-white shadow-sm"
-                  : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shrink-0 ${
+                activeTab === "catalog" ? "bg-slate-950 text-white shadow-sm" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
               }`}
             >
               <Boxes className="w-3.5 h-3.5 text-emerald-400" />
@@ -481,10 +461,8 @@ export default function SupplierDashboardPage() {
 
             <button
               onClick={() => setActiveTab("orders")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 ${
-                activeTab === "orders"
-                  ? "bg-slate-950 text-white shadow-sm"
-                  : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shrink-0 ${
+                activeTab === "orders" ? "bg-slate-950 text-white shadow-sm" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
               }`}
             >
               <Truck className="w-3.5 h-3.5" />
@@ -493,10 +471,8 @@ export default function SupplierDashboardPage() {
 
             <button
               onClick={() => setActiveTab("import")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 ${
-                activeTab === "import"
-                  ? "bg-slate-950 text-white shadow-sm"
-                  : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shrink-0 ${
+                activeTab === "import" ? "bg-slate-950 text-white shadow-sm" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
               }`}
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -505,10 +481,8 @@ export default function SupplierDashboardPage() {
 
             <button
               onClick={() => setActiveTab("add_product")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 ${
-                activeTab === "add_product"
-                  ? "bg-slate-950 text-white shadow-sm"
-                  : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shrink-0 ${
+                activeTab === "add_product" ? "bg-slate-950 text-white shadow-sm" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
               }`}
             >
               <Plus className="w-3.5 h-3.5" />
@@ -519,206 +493,147 @@ export default function SupplierDashboardPage() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
-        {/* ТАБ 1: МОЯТ КАТАЛОГ */}
         {activeTab === "catalog" && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-black text-slate-950">Управление на артикули и наличности</h2>
-                <p className="text-xs text-slate-500">Променяйте цени на едро, препоръчителни цени и маркирайте наличности в реално време.</p>
+                <h2 className="text-lg font-black text-slate-950">Ценоразпис и обемни отстъпки</h2>
+                <p className="text-xs text-slate-500">Настройвайте директно кои артикули да имат отстъпка за количество.</p>
               </div>
-
               <div className="relative w-full sm:w-72">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
                   type="text"
                   value={catalogSearch}
                   onChange={(e) => setCatalogSearch(e.target.value)}
-                  placeholder="Търси стек, баркод или категория..."
-                  className="w-full pl-10 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-emerald-600"
+                  placeholder="Търси стек..."
+                  className="w-full pl-10 pr-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs"
                 />
               </div>
             </div>
 
-            {loading ? (
-              <div className="py-20 text-center">
-                <div className="inline-block w-8 h-8 border-3 border-slate-950 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="text-xs text-slate-500 font-semibold">Зареждане на каталога...</p>
-              </div>
-            ) : supplierProducts.length === 0 ? (
-              <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center shadow-xs">
-                <Boxes className="w-12 h-12 stroke-1 text-slate-300 mx-auto mb-3" />
-                <h3 className="text-sm font-bold text-slate-800">Няма намерени артикули</h3>
-                <p className="text-xs text-slate-400 mt-1">Качете ценоразпис от Excel или добавете стек ръчно.</p>
-                <button
-                  onClick={() => setActiveTab("import")}
-                  className="mt-4 px-4 py-2 bg-slate-950 text-white rounded-xl text-xs font-bold shadow-sm hover:bg-slate-800 transition-all cursor-pointer"
-                >
-                  Към масовия импорт &rarr;
-                </button>
-              </div>
-            ) : (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                      <tr>
-                        <th className="p-3.5 pl-5">Продукт</th>
-                        <th className="p-3.5">Баркод</th>
-                        <th className="p-3.5">Категория</th>
-                        <th className="p-3.5">Едрова цена (стек)</th>
-                        <th className="p-3.5">Препор. за 1 бр.</th>
-                        <th className="p-3.5">Марж за магазин</th>
-                        <th className="p-3.5 text-center">Наличност</th>
-                        <th className="p-3.5 pr-5 text-right">Действия</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {supplierProducts.map((p) => {
-                        const isEditing = editingId === p.id;
-                        const retailTotal = p.rrpPrice * p.unitsPerCase;
-                        const profit = Math.max(0, retailTotal - p.casePrice);
-                        const marginPercent = retailTotal > 0 ? Math.round((profit / retailTotal) * 100) : 0;
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
+                  <tr>
+                    <th className="p-3.5 pl-5">Продукт</th>
+                    <th className="p-3.5">Цена стек</th>
+                    <th className="p-3.5">Препор. цена</th>
+                    <th className="p-3.5">Обемни отстъпки</th>
+                    <th className="p-3.5 text-center">Наличност</th>
+                    <th className="p-3.5 pr-5 text-right">Действия</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {supplierProducts.map((p) => {
+                    const isEditing = editingId === p.id;
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50/60">
+                        <td className="p-3.5 pl-5">
+                          <p className="font-bold text-slate-900">{p.name}</p>
+                          <p className="text-[10px] text-slate-400">Стек: {p.unitsPerCase} бр. &bull; {p.barcode}</p>
+                        </td>
 
-                        return (
-                          <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
-                            <td className="p-3.5 pl-5">
-                              <div className="flex items-center gap-3">
-                                <img
-                                  src={p.imageUrl}
-                                  alt={p.name}
-                                  className="w-10 h-10 object-contain rounded-lg bg-slate-50 border border-slate-200 p-1 shrink-0"
+                        <td className="p-3.5">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editForm.casePrice}
+                              onChange={(e) => setEditForm({ ...editForm, casePrice: parseFloat(e.target.value) || 0 })}
+                              className="w-20 px-2 py-1 border border-emerald-500 rounded text-xs font-mono"
+                            />
+                          ) : (
+                            <span className="font-mono font-bold text-slate-900">{p.casePrice.toFixed(2)} лв.</span>
+                          )}
+                        </td>
+
+                        <td className="p-3.5">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editForm.rrpPrice}
+                              onChange={(e) => setEditForm({ ...editForm, rrpPrice: parseFloat(e.target.value) || 0 })}
+                              className="w-16 px-2 py-1 border border-emerald-500 rounded text-xs font-mono"
+                            />
+                          ) : (
+                            <span className="font-mono text-emerald-700">{p.rrpPrice.toFixed(2)} лв.</span>
+                          )}
+                        </td>
+
+                        <td className="p-3.5">
+                          {isEditing ? (
+                            <div className="space-y-1 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                              <label className="flex items-center gap-1.5 text-[11px] font-bold">
+                                <input
+                                  type="checkbox"
+                                  checked={editForm.hasTieredDiscount}
+                                  onChange={(e) => setEditForm({ ...editForm, hasTieredDiscount: e.target.checked })}
                                 />
-                                <div>
-                                  <p className="font-bold text-slate-900 line-clamp-1">{p.name}</p>
-                                  <p className="text-[10px] text-slate-400">Стек от {p.unitsPerCase} бр.</p>
+                                <span>Активирай отстъпки</span>
+                              </label>
+                              {editForm.hasTieredDiscount && (
+                                <div className="flex gap-2 text-[10px] pt-1">
+                                  <span>{editForm.tier1Qty}+ бр: -{editForm.tier1Discount}%</span>
+                                  <span>{editForm.tier2Qty}+ бр: -{editForm.tier2Discount}%</span>
                                 </div>
-                              </div>
-                            </td>
-
-                            <td className="p-3.5 font-mono text-slate-500 text-[11px]">{p.barcode}</td>
-
-                            <td className="p-3.5">
-                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-semibold">
-                                {p.category}
-                              </span>
-                            </td>
-
-                            <td className="p-3.5">
-                              {isEditing ? (
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    value={editCasePrice}
-                                    onChange={(e) => setEditCasePrice(parseFloat(e.target.value) || 0)}
-                                    className="w-20 px-2 py-1 bg-white border border-emerald-500 rounded-lg text-xs font-mono font-bold"
-                                  />
-                                  <span className="font-mono text-xs">лв.</span>
-                                </div>
-                              ) : (
-                                <span className="font-black font-mono text-slate-900 text-sm">
-                                  {p.casePrice.toFixed(2)} лв.
-                                </span>
                               )}
-                            </td>
-
-                            <td className="p-3.5">
-                              {isEditing ? (
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    value={editRrpPrice}
-                                    onChange={(e) => setEditRrpPrice(parseFloat(e.target.value) || 0)}
-                                    className="w-16 px-2 py-1 bg-white border border-emerald-500 rounded-lg text-xs font-mono font-bold"
-                                  />
-                                  <span className="font-mono text-xs">лв.</span>
-                                </div>
-                              ) : (
-                                <span className="font-bold font-mono text-emerald-700">
-                                  {p.rrpPrice.toFixed(2)} лв.
+                            </div>
+                          ) : (
+                            <div>
+                              {p.hasTieredDiscount !== false ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  <Percent className="w-3 h-3" /> {p.tier1Qty || 5}+ (-{p.tier1Discount || 5}%) / {p.tier2Qty || 10}+ (-{p.tier2Discount || 10}%)
                                 </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-semibold">Без отстъпки</span>
                               )}
-                            </td>
+                            </div>
+                          )}
+                        </td>
 
-                            <td className="p-3.5">
-                              <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                                +{marginPercent}% (+{profit.toFixed(2)} лв.)
-                              </span>
-                            </td>
+                        <td className="p-3.5 text-center">
+                          <button
+                            onClick={() => handleToggleStock(p.id, p.inStock !== false)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                              p.inStock !== false ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700"
+                            }`}
+                          >
+                            {p.inStock !== false ? "В наличност" : "Изчерпан"}
+                          </button>
+                        </td>
 
-                            <td className="p-3.5 text-center">
-                              <button
-                                onClick={() => handleToggleStock(p.id, p.inStock !== false)}
-                                className={`px-2.5 py-1 rounded-full text-[10px] font-bold inline-flex items-center gap-1 transition-all cursor-pointer ${
-                                  p.inStock !== false
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-                                    : "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
-                                }`}
-                              >
-                                {p.inStock !== false ? (
-                                  <>
-                                    <CheckCircle className="w-3 h-3 text-emerald-600" /> В наличност
-                                  </>
-                                ) : (
-                                  <>
-                                    <XCircle className="w-3 h-3 text-red-500" /> Изчерпан
-                                  </>
-                                )}
+                        <td className="p-3.5 pr-5 text-right">
+                          {isEditing ? (
+                            <div className="flex justify-end gap-1">
+                              <button onClick={() => handleSavePrice(p.id)} className="p-1.5 bg-emerald-600 text-white rounded cursor-pointer">
+                                <Save className="w-3.5 h-3.5" />
                               </button>
-                            </td>
-
-                            <td className="p-3.5 pr-5 text-right">
-                              {isEditing ? (
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <button
-                                    onClick={() => handleSavePrice(p.id)}
-                                    disabled={savingEdit}
-                                    className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors cursor-pointer"
-                                    title="Запази"
-                                  >
-                                    <Save className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingId(null)}
-                                    className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
-                                    title="Откажи"
-                                  >
-                                    <XCircle className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <button
-                                    onClick={() => handleStartEdit(p)}
-                                    className="p-1.5 text-slate-500 hover:text-slate-950 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                                    title="Промени цена"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteProduct(p.id)}
-                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Изтрий артикул"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+                              <button onClick={() => setEditingId(null)} className="p-1.5 bg-slate-100 rounded cursor-pointer">
+                                <XCircle className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex justify-end gap-1">
+                              <button onClick={() => handleStartEdit(p)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded cursor-pointer">
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => handleDeleteProduct(p.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded cursor-pointer">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
-        {/* ТАБ 2: ПОРЪЧКИ */}
         {activeTab === "orders" && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -738,90 +653,66 @@ export default function SupplierDashboardPage() {
               )}
             </div>
 
-            {loading ? (
-              <div className="py-20 text-center">
-                <div className="inline-block w-8 h-8 border-3 border-slate-950 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="text-xs text-slate-500 font-semibold">Зареждане на поръчките...</p>
-              </div>
-            ) : supplierOrders.length === 0 ? (
+            {supplierOrders.length === 0 ? (
               <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center shadow-xs">
                 <Package className="w-12 h-12 stroke-1 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-sm font-bold text-slate-800">Няма нови поръчки към момента</h3>
-                <p className="text-xs text-slate-400 mt-1">Новите заявки от магазини ще се появяват тук за натоварване.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {supplierOrders.map((order) => {
                   const currentStatus = order.status || "pending";
-                  const storeName = order.storeName || order.store_name || "Супермаркет";
-                  const total = order.total || order.subtotal || 0;
-
                   return (
-                    <div 
-                      key={order.id}
-                      className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-5"
-                    >
+                    <div key={order.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-3">
                           <span className="text-xs font-black font-mono text-slate-950 bg-slate-100 px-2 py-1 rounded-md">
                             #{String(order.id).slice(0, 8)}
                           </span>
-                          <span className="text-sm font-bold text-slate-900">{storeName}</span>
+                          <span className="text-sm font-bold text-slate-900">{order.storeName}</span>
                         </div>
                         <p className="text-xs text-slate-500">
                           Адрес: <strong>{order.address || "гр. София"}</strong> &bull; ЕИК: <strong className="font-mono">{order.eik || "206894123"}</strong>
                         </p>
                         <p className="text-[11px] text-slate-400">
-                          Сума: <strong className="text-slate-900 font-mono">{Number(total).toFixed(2)} лв. с ДДС</strong> &bull; Условия: <strong className="uppercase">{order.paymentTerms || "Net 60"}</strong>
+                          Сума: <strong className="text-slate-900 font-mono">{Number(order.total).toFixed(2)} лв. с ДДС</strong>
                         </p>
                       </div>
 
                       <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 shrink-0">
                         <span className="text-[11px] font-bold text-slate-500 mr-1">Статус:</span>
-                        
                         <button
                           onClick={() => handleUpdateStatus(order.id, "pending")}
                           disabled={statusUpdating === order.id}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            currentStatus === "pending"
-                              ? "bg-slate-900 text-white shadow-xs"
-                              : "text-slate-600 hover:bg-slate-200"
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            currentStatus === "pending" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-200"
                           }`}
                         >
                           Приета
                         </button>
-
                         <button
                           onClick={() => handleUpdateStatus(order.id, "processing")}
                           disabled={statusUpdating === order.id}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            currentStatus === "processing"
-                              ? "bg-amber-500 text-slate-950 shadow-xs"
-                              : "text-slate-600 hover:bg-slate-200"
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            currentStatus === "processing" ? "bg-amber-500 text-slate-950" : "text-slate-600 hover:bg-slate-200"
                           }`}
                         >
                           В подготовка
                         </button>
-
                         <button
                           onClick={() => handleUpdateStatus(order.id, "shipped")}
                           disabled={statusUpdating === order.id}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            currentStatus === "shipped"
-                              ? "bg-blue-600 text-white shadow-xs"
-                              : "text-slate-600 hover:bg-slate-200"
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            currentStatus === "shipped" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-200"
                           }`}
                         >
                           Натоварена
                         </button>
-
                         <button
                           onClick={() => handleUpdateStatus(order.id, "delivered")}
                           disabled={statusUpdating === order.id}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            currentStatus === "delivered"
-                              ? "bg-emerald-600 text-white shadow-xs"
-                              : "text-slate-600 hover:bg-slate-200"
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            currentStatus === "delivered" ? "bg-emerald-600 text-white" : "text-slate-600 hover:bg-slate-200"
                           }`}
                         >
                           Доставена
@@ -835,7 +726,6 @@ export default function SupplierDashboardPage() {
           </div>
         )}
 
-        {/* ТАБ 3: МАСОВ EXCEL ИМПОРТ */}
         {activeTab === "import" && (
           <div className="max-w-4xl bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -850,7 +740,7 @@ export default function SupplierDashboardPage() {
               </div>
               <button
                 onClick={handleDownloadExcelTemplate}
-                className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold text-xs rounded-xl flex items-center gap-2 transition-colors cursor-pointer shrink-0"
+                className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold text-xs rounded-xl flex items-center gap-2"
               >
                 <Download className="w-4 h-4 text-emerald-700" />
                 Свали Excel (.xlsx) шаблон
@@ -878,8 +768,8 @@ export default function SupplierDashboardPage() {
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-3xl p-8 text-center cursor-pointer transition-all ${
                 dragActive 
-                  ? "border-emerald-600 bg-emerald-50/50 scale-[0.99]" 
-                  : "border-slate-300 hover:border-slate-400 bg-slate-50/60 hover:bg-slate-50"
+                  ? "border-emerald-600 bg-emerald-50/50" 
+                  : "border-slate-300 hover:border-slate-400 bg-slate-50/60"
               }`}
             >
               <div className="w-14 h-14 rounded-2xl bg-white shadow-sm border border-slate-200 flex items-center justify-center mx-auto mb-3 text-emerald-600">
@@ -888,9 +778,7 @@ export default function SupplierDashboardPage() {
               <p className="text-sm font-bold text-slate-900">
                 {fileName ? `Избран файл: ${fileName}` : "Провлачете Excel файл тук или кликнете за избор"}
               </p>
-              <p className="text-xs text-slate-400 mt-1">
-                Поддържат се файлове: <strong>.XLSX, .XLS, .CSV</strong> (до 10 MB)
-              </p>
+              <p className="text-xs text-slate-400 mt-1">Поддържат се файлове: .XLSX, .XLS, .CSV</p>
             </div>
 
             {importStatus && (
@@ -902,18 +790,6 @@ export default function SupplierDashboardPage() {
 
             {parsedRows.length > 0 && (
               <div className="space-y-4 pt-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                    Разпознати артикули ({parsedRows.length} бр.)
-                  </span>
-                  <button
-                    onClick={() => { setParsedRows([]); setFileName(null); }}
-                    className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> Откажи
-                  </button>
-                </div>
-
                 <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-2xl bg-white">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 sticky top-0">
@@ -923,7 +799,6 @@ export default function SupplierDashboardPage() {
                         <th className="p-2.5">Цена стек</th>
                         <th className="p-2.5">Препор. цена</th>
                         <th className="p-2.5">Брой в стек</th>
-                        <th className="p-2.5">Категория</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -931,10 +806,9 @@ export default function SupplierDashboardPage() {
                         <tr key={idx} className="hover:bg-slate-50/50">
                           <td className="p-2.5 pl-4 font-bold text-slate-900">{r.name}</td>
                           <td className="p-2.5 font-mono text-slate-500">{r.barcode}</td>
-                          <td className="p-2.5 font-mono font-bold text-slate-900">{r.casePrice.toFixed(2)} лв.</td>
+                          <td className="p-2.5 font-mono font-bold">{r.casePrice.toFixed(2)} лв.</td>
                           <td className="p-2.5 font-mono text-emerald-700">{r.rrpPrice.toFixed(2)} лв.</td>
                           <td className="p-2.5 font-mono">{r.unitsPerCase} бр.</td>
-                          <td className="p-2.5">{r.category}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -944,23 +818,20 @@ export default function SupplierDashboardPage() {
                 <button
                   onClick={handleUploadRows}
                   disabled={importing}
-                  className="w-full py-3.5 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider disabled:opacity-50"
+                  className="w-full py-3.5 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2 uppercase tracking-wider disabled:opacity-50"
                 >
                   <Upload className="w-4 h-4 text-emerald-400" />
-                  <span>{importing ? "Импортиране..." : `Качи всички ${parsedRows.length} артикула в каталога`}</span>
+                  <span>{importing ? "Импортиране..." : `Качи всички ${parsedRows.length} артикула`}</span>
                 </button>
               </div>
             )}
           </div>
         )}
 
-        {/* ТАБ 4: РЪЧНО ДОБАВЯНЕ НА СТЕК */}
         {activeTab === "add_product" && (
-          <div className="max-w-2xl bg-white rounded-3xl border border-slate-200 p-8 shadow-xs space-y-6">
-            <div>
-              <h2 className="text-lg font-black text-slate-950">Добавяне на нов стек към каталога</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Въведете параметрите на опаковката и цената на едро.</p>
-            </div>
+          <div className="max-w-2xl bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+            <h2 className="text-lg font-black text-slate-950 mb-1">Добавяне на нов стек & Персонални отстъпки</h2>
+            <p className="text-xs text-slate-500 mb-6">Въведете параметрите на продукта и конфигурирайте ценовата си политика.</p>
 
             <form onSubmit={async (e) => {
               e.preventDefault();
@@ -975,7 +846,12 @@ export default function SupplierDashboardPage() {
                 category: newProduct.category,
                 supplierName: user?.company_name || user?.companyName || "Официален Производител",
                 supplierMinimum: brandMoq,
-                imageUrl: newProduct.imageUrl || "https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500"
+                imageUrl: newProduct.imageUrl || "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80",
+                hasTieredDiscount: newProduct.hasTieredDiscount,
+                tier1Qty: parseInt(newProduct.tier1Qty, 10),
+                tier1Discount: parseFloat(newProduct.tier1Discount),
+                tier2Qty: parseInt(newProduct.tier2Qty, 10),
+                tier2Discount: parseFloat(newProduct.tier2Discount),
               };
               try {
                 const res = await fetch(`${baseUrl}/api/products`, {
@@ -984,17 +860,11 @@ export default function SupplierDashboardPage() {
                   body: JSON.stringify(payload)
                 });
                 if (res.ok) {
-                  setProductSuccess(true);
-                  setNewProduct({ name: "", barcode: "", casePrice: "", rrpPrice: "", unitsPerCase: "24", category: "Напитки", imageUrl: "" });
                   await fetchDashboardData();
-                  setTimeout(() => setProductSuccess(false), 2500);
                   setActiveTab("catalog");
                 }
-              } catch (e) {
-                alert("Грешка при запис");
-              } finally {
-                setProductSaving(false);
-              }
+              } catch (err) {}
+              setProductSaving(false);
             }} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Име на продукта / стека *</label>
@@ -1004,7 +874,7 @@ export default function SupplierDashboardPage() {
                   value={newProduct.name}
                   onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
                   placeholder="напр. Red Bull Sugarfree 250ml"
-                  className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
                 />
               </div>
 
@@ -1018,11 +888,11 @@ export default function SupplierDashboardPage() {
                     value={newProduct.casePrice}
                     onChange={(e) => setNewProduct({ ...newProduct, casePrice: e.target.value })}
                     placeholder="24.50"
-                    className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-600 focus:bg-white"
+                    className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Препоръчителна цена за 1бр (лв.) *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Препоръчителна за 1бр (лв.) *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1030,7 +900,7 @@ export default function SupplierDashboardPage() {
                     value={newProduct.rrpPrice}
                     onChange={(e) => setNewProduct({ ...newProduct, rrpPrice: e.target.value })}
                     placeholder="1.60"
-                    className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-600 focus:bg-white"
+                    className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
                   />
                 </div>
               </div>
@@ -1043,8 +913,7 @@ export default function SupplierDashboardPage() {
                     required
                     value={newProduct.unitsPerCase}
                     onChange={(e) => setNewProduct({ ...newProduct, unitsPerCase: e.target.value })}
-                    placeholder="24"
-                    className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-600 focus:bg-white"
+                    className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
                   />
                 </div>
                 <div>
@@ -1052,7 +921,7 @@ export default function SupplierDashboardPage() {
                   <select
                     value={newProduct.category}
                     onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                    className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white"
+                    className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
                   >
                     <option value="Напитки">Напитки & Води</option>
                     <option value="Снаксове">Чипс & Ядки</option>
@@ -1067,22 +936,79 @@ export default function SupplierDashboardPage() {
                     value={newProduct.barcode}
                     onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
                     placeholder="3800..."
-                    className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-emerald-600 focus:bg-white"
+                    className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
                   />
                 </div>
+              </div>
+
+              <div className="p-4 bg-emerald-50/50 border border-emerald-200 rounded-2xl space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newProduct.hasTieredDiscount}
+                    onChange={(e) => setNewProduct({ ...newProduct, hasTieredDiscount: e.target.checked })}
+                    className="rounded text-emerald-600"
+                  />
+                  <span className="text-xs font-bold text-slate-900">Предлагай отстъпка за количество (Tiered Pricing)</span>
+                </label>
+
+                {newProduct.hasTieredDiscount && (
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase">Ниво 1 (Малък обем)</p>
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="number"
+                          value={newProduct.tier1Qty}
+                          onChange={(e) => setNewProduct({ ...newProduct, tier1Qty: e.target.value })}
+                          className="w-16 px-2 py-1 text-xs border rounded"
+                        />
+                        <span className="text-xs self-center">бр. &rarr;</span>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={newProduct.tier1Discount}
+                          onChange={(e) => setNewProduct({ ...newProduct, tier1Discount: e.target.value })}
+                          className="w-16 px-2 py-1 text-xs border rounded font-bold text-emerald-700"
+                        />
+                        <span className="text-xs self-center">%</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase">Ниво 2 (Палетно количество)</p>
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="number"
+                          value={newProduct.tier2Qty}
+                          onChange={(e) => setNewProduct({ ...newProduct, tier2Qty: e.target.value })}
+                          className="w-16 px-2 py-1 text-xs border rounded"
+                        />
+                        <span className="text-xs self-center">бр. &rarr;</span>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={newProduct.tier2Discount}
+                          onChange={(e) => setNewProduct({ ...newProduct, tier2Discount: e.target.value })}
+                          className="w-16 px-2 py-1 text-xs border rounded font-bold text-emerald-700"
+                        />
+                        <span className="text-xs self-center">%</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <button
                 type="submit"
                 disabled={productSaving}
-                className="w-full py-3.5 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer uppercase tracking-wider disabled:opacity-50"
+                className="w-full py-3.5 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer uppercase tracking-wider"
               >
-                {productSaving ? "Публикуване..." : "Публикувай в каталога"}
+                {productSaving ? "Публикуване..." : "Публикувай стек с отстъпки"}
               </button>
             </form>
           </div>
         )}
-
       </main>
     </div>
   );
