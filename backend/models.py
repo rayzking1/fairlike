@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, DateTime, Text
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, DateTime, Text, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -36,8 +36,16 @@ class Product(Base):
     casePrice = Column("case_price", Float, nullable=False)
     rrpPrice = Column("rrp_price", Float, nullable=False)
     imageUrl = Column("image_url", Text, default="https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80")
-    supplier_id = Column(String, ForeignKey("users.id"), nullable=True)
+    inStock = Column("in_stock", Boolean, default=True)
+    
+    # Персонализирани обемни отстъпки от доставчика
+    hasTieredDiscount = Column("has_tiered_discount", Boolean, default=True)
+    tier1Qty = Column("tier1_qty", Integer, default=5)
+    tier1Discount = Column("tier1_discount", Float, default=5.0)
+    tier2Qty = Column("tier2_qty", Integer, default=10)
+    tier2Discount = Column("tier2_discount", Float, default=10.0)
 
+    supplier_id = Column(String, ForeignKey("users.id"), nullable=True)
     owner = relationship("User", back_populates="products")
 
 class Order(Base):

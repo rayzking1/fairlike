@@ -35,7 +35,12 @@ def seed_initial_products():
                 unitsPerCase=24,
                 casePrice=38.40,
                 rrpPrice=2.29,
-                imageUrl="https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80"
+                imageUrl="https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80",
+                hasTieredDiscount=True,
+                tier1Qty=5,
+                tier1Discount=5.0,
+                tier2Qty=10,
+                tier2Discount=10.0
             ),
             models.Product(
                 id="2",
@@ -47,7 +52,12 @@ def seed_initial_products():
                 unitsPerCase=18,
                 casePrice=43.20,
                 rrpPrice=3.19,
-                imageUrl="https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80"
+                imageUrl="https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80",
+                hasTieredDiscount=True,
+                tier1Qty=5,
+                tier1Discount=5.0,
+                tier2Qty=10,
+                tier2Discount=10.0
             ),
             models.Product(
                 id="3",
@@ -59,7 +69,12 @@ def seed_initial_products():
                 unitsPerCase=24,
                 casePrice=48.00,
                 rrpPrice=2.79,
-                imageUrl="https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80"
+                imageUrl="https://images.unsplash.com/photo-1622543925917-763c34d1a86e?w=500&q=80",
+                hasTieredDiscount=True,
+                tier1Qty=5,
+                tier1Discount=5.0,
+                tier2Qty=10,
+                tier2Discount=10.0
             ),
             models.Product(
                 id="4",
@@ -71,7 +86,12 @@ def seed_initial_products():
                 unitsPerCase=30,
                 casePrice=36.00,
                 rrpPrice=1.69,
-                imageUrl="https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500&q=80"
+                imageUrl="https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500&q=80",
+                hasTieredDiscount=True,
+                tier1Qty=5,
+                tier1Discount=5.0,
+                tier2Qty=10,
+                tier2Discount=10.0
             ),
         ]
         db.add_all(initial_products)
@@ -117,6 +137,12 @@ class ProductSchema(BaseModel):
     casePrice: float
     rrpPrice: float
     imageUrl: str
+    inStock: Optional[bool] = True
+    hasTieredDiscount: Optional[bool] = True
+    tier1Qty: Optional[int] = 5
+    tier1Discount: Optional[float] = 5.0
+    tier2Qty: Optional[int] = 10
+    tier2Discount: Optional[float] = 10.0
 
     class Config:
         from_attributes = True
@@ -131,6 +157,11 @@ class ProductCreate(BaseModel):
     casePrice: float
     rrpPrice: float
     imageUrl: Optional[str] = "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80"
+    hasTieredDiscount: Optional[bool] = True
+    tier1Qty: Optional[int] = 5
+    tier1Discount: Optional[float] = 5.0
+    tier2Qty: Optional[int] = 10
+    tier2Discount: Optional[float] = 10.0
 
 class OrderItemSchema(BaseModel):
     productId: str
@@ -199,7 +230,7 @@ def generate_order_invoice_pdf(order_dict: dict, items_data: list) -> bytes:
         HTML(string=rendered_html).write_pdf(pdf_io)
         return pdf_io.getvalue()
     except Exception as e:
-        print(f"⚠️ Грешка при PDF: {e}")
+        print(f"⚠️ PDF error: {e}")
         return b""
 
 def trigger_direct_email(order_dict: dict, items_data: list):
@@ -216,7 +247,7 @@ def trigger_direct_email(order_dict: dict, items_data: list):
     ])
 
     html_content = f"""
-    <div style="font-family: Arial, sans-serif; color: #0f172a; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+    <div style="font-family: Arial, sans-serif; color: #0f172a; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px;">
         <h1 style="margin: 0; font-size: 20px; font-weight: 900;">OPTOM<span style="color: #059669;">.BG</span></h1>
         <h2>Здравейте, {order_dict['storeName']}!</h2>
         <p>Вашата поръчка с номер <strong>#{order_dict['id']}</strong> беше приета успешно.</p>
@@ -277,54 +308,16 @@ def add_product(item: ProductCreate, db: Session = Depends(get_db)):
         casePrice=item.casePrice,
         rrpPrice=item.rrpPrice,
         imageUrl=item.imageUrl or "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80",
+        hasTieredDiscount=item.hasTieredDiscount if item.hasTieredDiscount is not None else True,
+        tier1Qty=item.tier1Qty or 5,
+        tier1Discount=item.tier1Discount or 5.0,
+        tier2Qty=item.tier2Qty or 10,
+        tier2Discount=item.tier2Discount or 10.0
     )
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
     return new_product
-
-@app.post("/api/products/import")
-async def import_products(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    contents = await file.read()
-    try:
-        if file.filename.endswith(".csv"):
-            df = pd.read_csv(io.BytesIO(contents))
-        else:
-            df = pd.read_excel(io.BytesIO(contents))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Грешка при четене: {e}")
-
-    df.columns = [str(col).strip().lower().replace(" ", "_") for col in df.columns]
-    imported, updated = 0, 0
-
-    for _, row in df.iterrows():
-        bcode = str(row.get("barcode", "")).replace(".0", "").strip()
-        if not bcode:
-            continue
-        prod = db.query(models.Product).filter(models.Product.barcode == bcode).first()
-        if prod:
-            prod.name = str(row.get("name", prod.name)).strip()
-            prod.casePrice = float(row.get("case_price", prod.casePrice))
-            prod.rrpPrice = float(row.get("rrp_price", prod.rrpPrice))
-            prod.unitsPerCase = int(row.get("units_per_case", prod.unitsPerCase))
-            updated += 1
-        else:
-            new_p = models.Product(
-                id=str(uuid.uuid4())[:8],
-                name=str(row.get("name", "Артикул")).strip(),
-                category=str(row.get("category", "Храни")).strip(),
-                barcode=bcode,
-                supplierName=str(row.get("supplier_name", "Официален Дистрибутор")).strip(),
-                supplierMinimum=float(row.get("supplier_minimum", 50.0)),
-                unitsPerCase=int(row.get("units_per_case", 24)),
-                casePrice=float(row.get("case_price", 20.0)),
-                rrpPrice=float(row.get("rrp_price", 25.0)),
-                imageUrl=str(row.get("image_url", "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80")).strip()
-            )
-            db.add(new_p)
-            imported += 1
-    db.commit()
-    return {"status": "success", "imported": imported, "updated": updated}
 
 @app.get("/api/orders")
 def get_orders(email: Optional[str] = None, db: Session = Depends(get_db)):
@@ -429,6 +422,11 @@ class UpdateProductRequest(BaseModel):
     rrpPrice: Optional[float] = None
     inStock: Optional[bool] = None
     supplierMinimum: Optional[float] = None
+    hasTieredDiscount: Optional[bool] = None
+    tier1Qty: Optional[int] = None
+    tier1Discount: Optional[float] = None
+    tier2Qty: Optional[int] = None
+    tier2Discount: Optional[float] = None
 
 @app.patch("/api/products/{product_id}")
 def update_product(product_id: str, payload: UpdateProductRequest, db: Session = Depends(get_db)):
@@ -442,6 +440,18 @@ def update_product(product_id: str, payload: UpdateProductRequest, db: Session =
         product.rrpPrice = payload.rrpPrice
     if payload.supplierMinimum is not None:
         product.supplierMinimum = payload.supplierMinimum
+    if payload.inStock is not None:
+        product.inStock = payload.inStock
+    if payload.hasTieredDiscount is not None:
+        product.hasTieredDiscount = payload.hasTieredDiscount
+    if payload.tier1Qty is not None:
+        product.tier1Qty = payload.tier1Qty
+    if payload.tier1Discount is not None:
+        product.tier1Discount = payload.tier1Discount
+    if payload.tier2Qty is not None:
+        product.tier2Qty = payload.tier2Qty
+    if payload.tier2Discount is not None:
+        product.tier2Discount = payload.tier2Discount
 
     db.commit()
     db.refresh(product)

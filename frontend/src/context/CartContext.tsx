@@ -13,11 +13,37 @@ export interface CartProduct {
   casePrice: number;
   rrpPrice: number;
   imageUrl: string;
+  hasTieredDiscount?: boolean;
+  tier1Qty?: number;
+  tier1Discount?: number;
+  tier2Qty?: number;
+  tier2Discount?: number;
 }
 
 export interface CartItem {
   product: CartProduct;
   quantityCases: number;
+}
+
+export function getTieredPrice(product: CartProduct, cases: number): { effectivePrice: number; discountPercent: number } {
+  if (product.hasTieredDiscount === false) {
+    return { effectivePrice: product.casePrice, discountPercent: 0 };
+  }
+
+  const t2Qty = product.tier2Qty || 10;
+  const t2Disc = product.tier2Discount || 10.0;
+  const t1Qty = product.tier1Qty || 5;
+  const t1Disc = product.tier1Discount || 5.0;
+
+  if (cases >= t2Qty && t2Disc > 0) {
+    const discounted = product.casePrice * (1 - t2Disc / 100);
+    return { effectivePrice: +discounted.toFixed(2), discountPercent: t2Disc };
+  } else if (cases >= t1Qty && t1Disc > 0) {
+    const discounted = product.casePrice * (1 - t1Disc / 100);
+    return { effectivePrice: +discounted.toFixed(2), discountPercent: t1Disc };
+  }
+
+  return { effectivePrice: product.casePrice, discountPercent: 0 };
 }
 
 interface CartContextType {
@@ -32,6 +58,7 @@ interface CartContextType {
   vatAmount: number;
   grandTotal: number;
   estimatedTotalProfit: number;
+  totalSavedFromTiers: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -108,16 +135,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems([]);
   };
 
-  const cartTotal = items.reduce(
-    (sum, it) => sum + it.quantityCases * it.product.casePrice,
-    0
-  );
-  const vatAmount = cartTotal * 0.20;
-  const grandTotal = cartTotal + vatAmount;
+  const cartTotal = items.reduce((sum, it) => {
+    const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
+    return sum + it.quantityCases * effectivePrice;
+  }, 0);
+
+  const originalTotalNoDiscount = items.reduce((sum, it) => {
+    return sum + it.quantityCases * it.product.casePrice;
+  }, 0);
+
+  const totalSavedFromTiers = Math.max(0, originalTotalNoDiscount - cartTotal);
+  const vatAmount = +(cartTotal * 0.20).toFixed(2);
+  const grandTotal = +(cartTotal + vatAmount).toFixed(2);
 
   const estimatedTotalProfit = items.reduce((sum, it) => {
+    const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
     const revenuePerCase = it.product.rrpPrice * it.product.unitsPerCase;
-    const profitPerCase = Math.max(0, revenuePerCase - it.product.casePrice);
+    const profitPerCase = Math.max(0, revenuePerCase - effectivePrice);
     return sum + profitPerCase * it.quantityCases;
   }, 0);
 
@@ -135,6 +169,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         vatAmount,
         grandTotal,
         estimatedTotalProfit,
+        totalSavedFromTiers,
       }}
     >
       {children}
