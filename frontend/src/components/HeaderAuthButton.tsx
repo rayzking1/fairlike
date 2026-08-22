@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { LogIn, LogOut, User as UserIcon, Building2, Store, FileText, PackagePlus } from "lucide-react";
+import { LogIn, LogOut, Building2, Store, FileText, PackagePlus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import AuthModal from "./AuthModal";
 
@@ -14,9 +14,9 @@ export default function HeaderAuthButton() {
       <>
         <button
           onClick={() => setIsAuthOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer hover:scale-105"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#121212] hover:bg-neutral-800 text-white rounded-md text-xs font-semibold shadow-xs transition-all cursor-pointer"
         >
-          <LogIn className="w-3.5 h-3.5 text-emerald-400" />
+          <LogIn className="w-3.5 h-3.5" />
           <span>Вход / Регистрация</span>
         </button>
         <AuthModal />
@@ -33,34 +33,34 @@ export default function HeaderAuthButton() {
         {isSupplier ? (
           <Link
             href="/supplier"
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-950 rounded-xl text-xs font-bold transition-all shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] text-[#121212] rounded-md text-xs font-semibold transition-all shadow-2xs"
           >
-            <PackagePlus className="w-3.5 h-3.5 text-emerald-700" />
+            <PackagePlus className="w-3.5 h-3.5 text-[#121212]" />
             <span className="hidden sm:inline">Доставчик Панел</span>
           </Link>
         ) : (
           <Link
             href="/orders"
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] text-[#121212] rounded-md text-xs font-semibold transition-all shadow-2xs"
           >
-            <FileText className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden sm:inline">Фактури & Поръчки</span>
+            <FileText className="w-3.5 h-3.5 text-[#121212]" />
+            <span className="hidden sm:inline">Фактури & Заявки</span>
           </Link>
         )}
 
         {/* Профилен бейдж */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100/90 border border-slate-200 rounded-xl">
+        <div className="flex items-center gap-2 px-2.5 py-1 bg-white border border-[#EBE8E3] rounded-md">
           {isSupplier ? (
-            <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <Building2 className="w-3.5 h-3.5 text-[#121212] shrink-0" />
           ) : (
-            <Store className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+            <Store className="w-3.5 h-3.5 text-[#121212] shrink-0" />
           )}
-          <div className="text-left hidden md:block max-w-[140px]">
-            <p className="text-[11px] font-bold text-slate-900 truncate leading-tight">
+          <div className="text-left hidden md:block max-w-[130px]">
+            <p className="text-[11px] font-bold text-[#121212] truncate leading-tight">
               {user.company_name || user.companyName || user.email.split("@")[0]}
             </p>
-            <p className="text-[9px] text-slate-400 font-medium uppercase tracking-wider">
-              {isSupplier ? "Производител" : "Търговски обект"}
+            <p className="text-[9px] text-[#737373] font-medium uppercase tracking-wider">
+              {isSupplier ? "Фабрика" : "Обект"}
             </p>
           </div>
         </div>
@@ -69,7 +69,7 @@ export default function HeaderAuthButton() {
         <button
           onClick={logout}
           title="Изход от профила"
-          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl border border-transparent hover:border-red-200 transition-all cursor-pointer"
+          className="p-1.5 text-neutral-400 hover:text-[#121212] hover:bg-[#FAF9F7] rounded-md border border-transparent hover:border-[#EBE8E3] transition-all cursor-pointer"
         >
           <LogOut className="w-3.5 h-3.5" />
         </button>
