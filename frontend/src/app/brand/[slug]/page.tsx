@@ -25,7 +25,7 @@ export default function BrandStorefrontPage() {
   const params = useParams();
   const rawBrand = params?.slug ? decodeURIComponent(String(params.slug)) : "";
   
-  const { user, setIsAuthOpen } = useAuth();
+  const { user, setIsAuthOpen, openAuthWithProduct } = useAuth();
   const { addToCart, setIsCartOpen, items: cartItems } = useCart();
   const isSupplier = user?.role === "supplier";
 
@@ -87,7 +87,7 @@ export default function BrandStorefrontPage() {
 
   const handleAddOrAuth = (product: CartProduct) => {
     if (!user) {
-      setIsAuthOpen(true);
+      openAuthWithProduct({ name: product.name, imageUrl: product.imageUrl, unitsPerCase: product.unitsPerCase });
       return;
     }
     if (isSupplier) {
@@ -146,7 +146,7 @@ export default function BrandStorefrontPage() {
         </div>
       </header>
 
-      {/* 2. FAIRE BRAND HERO BANNER */}
+      {/* 2. BRAND HERO BANNER */}
       <section className="border-b border-[#EBE8E3] bg-[#FAF9F7]">
         <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
@@ -185,7 +185,7 @@ export default function BrandStorefrontPage() {
         </div>
       </section>
 
-      {/* 3. КАТАЛОГ НА БРАНДА */}
+      {/* 3. BRAND CATALOG */}
       <main id="brand-catalog" className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10 space-y-6">
         
         {brandCategories.length > 1 && (
@@ -240,7 +240,8 @@ export default function BrandStorefrontPage() {
               return (
                 <div 
                   key={p.id}
-                  className="group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs"
+                  onClick={() => !user && openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase })}
+                  className={`group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs ${!user ? 'cursor-pointer' : ''}`}
                 >
                   <div>
                     <div className="relative aspect-square bg-[#FAF9F7] p-4 flex items-center justify-center overflow-hidden border-b border-[#F2F0EB]">
@@ -310,14 +311,14 @@ export default function BrandStorefrontPage() {
                         <div className="flex items-center gap-1.5">
                           <div className="flex items-center bg-[#FAF9F7] rounded-md border border-[#EBE8E3] p-0.5">
                             <button
-                              onClick={() => handleQtyChange(p.id, -1)}
+                              onClick={(e) => { e.stopPropagation(); handleQtyChange(p.id, -1); }}
                               className="w-5 h-5 flex items-center justify-center text-neutral-600 hover:bg-white rounded cursor-pointer"
                             >
                               <Minus className="w-2.5 h-2.5" />
                             </button>
                             <span className="w-4 text-center text-xs font-bold font-mono text-[#121212]">{qty}</span>
                             <button
-                              onClick={() => handleQtyChange(p.id, 1)}
+                              onClick={(e) => { e.stopPropagation(); handleQtyChange(p.id, 1); }}
                               className="w-5 h-5 flex items-center justify-center text-neutral-600 hover:bg-white rounded cursor-pointer"
                             >
                               <Plus className="w-2.5 h-2.5" />
@@ -325,7 +326,7 @@ export default function BrandStorefrontPage() {
                           </div>
 
                           <button
-                            onClick={() => handleAddOrAuth(p)}
+                            onClick={(e) => { e.stopPropagation(); handleAddOrAuth(p); }}
                             className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                               addedAnimation === p.id
                                 ? "bg-[#121212] text-white"
@@ -346,11 +347,15 @@ export default function BrandStorefrontPage() {
                       )
                     ) : (
                       <button
-                        onClick={() => setIsAuthOpen(true)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase });
+                        }}
                         className="w-full py-2 bg-[#FAF9F7] hover:bg-[#EBE8E3] text-[#121212] border border-[#EBE8E3] rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         <Lock className="w-3 h-3 text-[#737373]" />
-                        <span>Отключи цена на едро</span>
+                        <span>Отключи цена на едро &rarr;</span>
                       </button>
                     )}
                   </div>

@@ -81,7 +81,7 @@ const FEATURED_BRANDS = [
 
 export default function HomePage() {
   const { items: cartItems, addToCart, setIsCartOpen } = useCart();
-  const { user, setIsAuthOpen } = useAuth();
+  const { user, setIsAuthOpen, openAuthWithProduct } = useAuth();
   const isSupplier = user?.role === "supplier";
   
   const [products, setProducts] = useState<CartProduct[]>([]);
@@ -90,7 +90,6 @@ export default function HomePage() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
 
-  // Скрол динамика
   const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
@@ -182,7 +181,7 @@ export default function HomePage() {
 
   const handleAddOrAuth = (product: CartProduct) => {
     if (!user) {
-      setIsAuthOpen(true);
+      openAuthWithProduct({ name: product.name, imageUrl: product.imageUrl, unitsPerCase: product.unitsPerCase });
       return;
     }
     if (isSupplier) {
@@ -195,7 +194,6 @@ export default function HomePage() {
     setTimeout(() => setAddedAnimation(null), 1200);
   };
 
-  // Нежно, прогресивно разсейване на Hero банера при скрол
   const heroOpacity = Math.max(0, 1 - scrollY / 500);
   const heroTranslateY = scrollY * 0.15;
 
@@ -268,7 +266,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* 3. HERO СЕКЦИЯ С ПЛАВНО ПРЕМАХВАНЕ ПРИ СКРОЛ */}
+      {/* 3. HERO SECTION */}
       <section className="max-w-[1360px] mx-auto px-4 sm:px-8 py-6">
         <div 
           style={{
@@ -311,7 +309,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4. FEATURED FMCG BRANDS */}
+      {/* 4. FEATURED BRANDS */}
       <section className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10 transition-all duration-300">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl sm:text-2xl font-serif font-normal text-[#121212]">
@@ -376,7 +374,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 6. BESTSELLERS CATALOG (ВИДИМ ВЕДНАГА) */}
+      {/* 6. BESTSELLERS CATALOG */}
       <section id="catalog-grid" className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10 transition-all duration-300">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -417,10 +415,10 @@ export default function HomePage() {
               return (
                 <div 
                   key={p.id}
-                  className="group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs hover:-translate-y-1 hover:shadow-md"
+                  onClick={() => !user && openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase })}
+                  className={`group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs hover:-translate-y-1 hover:shadow-md ${!user ? 'cursor-pointer' : ''}`}
                 >
                   <div>
-                    {/* Снимка */}
                     <div className="relative aspect-square bg-[#FAF9F7] p-4 flex items-center justify-center overflow-hidden border-b border-[#F2F0EB]">
                       <img 
                         src={p.imageUrl} 
@@ -440,7 +438,6 @@ export default function HomePage() {
                       )}
                     </div>
 
-                    {/* Детайли */}
                     <div className="p-3.5 space-y-2">
                       <div>
                         <h3 className="text-xs font-bold text-[#121212] line-clamp-2 h-8 leading-snug">
@@ -476,7 +473,6 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* Добавяне в кошница */}
                   <div className="p-3.5 pt-0">
                     {user ? (
                       isSupplier ? (
@@ -490,14 +486,14 @@ export default function HomePage() {
                         <div className="flex items-center gap-1.5">
                           <div className="flex items-center bg-[#FAF9F7] rounded-md border border-[#EBE8E3] p-0.5">
                             <button
-                              onClick={() => handleQtyChange(p.id, -1)}
+                              onClick={(e) => { e.stopPropagation(); handleQtyChange(p.id, -1); }}
                               className="w-5 h-5 flex items-center justify-center text-neutral-600 hover:bg-white rounded cursor-pointer"
                             >
                               <Minus className="w-2.5 h-2.5" />
                             </button>
                             <span className="w-4 text-center text-xs font-bold font-mono text-[#121212]">{qty}</span>
                             <button
-                              onClick={() => handleQtyChange(p.id, 1)}
+                              onClick={(e) => { e.stopPropagation(); handleQtyChange(p.id, 1); }}
                               className="w-5 h-5 flex items-center justify-center text-neutral-600 hover:bg-white rounded cursor-pointer"
                             >
                               <Plus className="w-2.5 h-2.5" />
@@ -505,7 +501,7 @@ export default function HomePage() {
                           </div>
 
                           <button
-                            onClick={() => handleAddOrAuth(p)}
+                            onClick={(e) => { e.stopPropagation(); handleAddOrAuth(p); }}
                             className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                               addedAnimation === p.id
                                 ? "bg-[#121212] text-white"
@@ -526,11 +522,15 @@ export default function HomePage() {
                       )
                     ) : (
                       <button
-                        onClick={() => setIsAuthOpen(true)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase });
+                        }}
                         className="w-full py-2 bg-[#FAF9F7] hover:bg-[#EBE8E3] text-[#121212] border border-[#EBE8E3] rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         <Lock className="w-3 h-3 text-[#737373]" />
-                        <span>Отключи цена на едро</span>
+                        <span>Отключи цена на едро &rarr;</span>
                       </button>
                     )}
                   </div>

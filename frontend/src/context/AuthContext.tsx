@@ -15,11 +15,19 @@ export interface User {
   address?: string;
 }
 
+export interface LockedProductPreview {
+  name: string;
+  imageUrl: string;
+  unitsPerCase?: number;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthOpen: boolean;
+  activeProductPreview: LockedProductPreview | null;
   setIsAuthOpen: (open: boolean) => void;
+  openAuthWithProduct: (product: LockedProductPreview) => void;
   setAuthSession: (user: User, token?: string) => void;
   login: (userDataOrEmail: User | string, roleOrCompany?: string) => void;
   logout: () => void;
@@ -34,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [activeProductPreview, setActiveProductPreview] = useState<LockedProductPreview | null>(null);
 
   useEffect(() => {
     try {
@@ -52,6 +61,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Грешка при зареждане на сесията:", e);
     }
   }, []);
+
+  const openAuthWithProduct = (product: LockedProductPreview) => {
+    setActiveProductPreview(product);
+    setIsAuthOpen(true);
+  };
+
+  const handleSetIsAuthOpen = (open: boolean) => {
+    setIsAuthOpen(open);
+    if (!open) {
+      setActiveProductPreview(null);
+    }
+  };
 
   const setAuthSession = (userData: User, jwtToken?: string) => {
     setUser(userData);
@@ -96,7 +117,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthOpen, setIsAuthOpen, setAuthSession, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isAuthOpen,
+        activeProductPreview,
+        setIsAuthOpen: handleSetIsAuthOpen,
+        openAuthWithProduct,
+        setAuthSession,
+        login,
+        logout
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
