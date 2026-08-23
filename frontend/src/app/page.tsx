@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { 
   ShoppingBag, 
   ArrowRight, 
@@ -80,6 +81,7 @@ const FEATURED_BRANDS = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
   const { items: cartItems, addToCart, setIsCartOpen } = useCart();
   const { user, setIsAuthOpen, openAuthWithProduct } = useAuth();
   const isSupplier = user?.role === "supplier";
@@ -89,6 +91,7 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState("Всички");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
+  const [showWelcomePopup, setShowWelcomePopup] = useState(false);
 
   const [scrollY, setScrollY] = useState(0);
 
@@ -107,8 +110,6 @@ export default function HomePage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const [showWelcomePopup, setShowWelcomePopup] = useState(false);
-
   useEffect(() => {
     if (!user) {
       const isDismissed = sessionStorage.getItem("optom_welcome_dismissed");
@@ -118,6 +119,8 @@ export default function HomePage() {
         }, 5000);
         return () => clearTimeout(timer);
       }
+    } else {
+      setShowWelcomePopup(false);
     }
   }, [user]);
 
@@ -192,6 +195,20 @@ export default function HomePage() {
     addToCart(product, cases);
     setAddedAnimation(product.id);
     setTimeout(() => setAddedAnimation(null), 1200);
+  };
+
+  const handleProductCardClick = (product: CartProduct) => {
+    if (!user) {
+      openAuthWithProduct({
+        name: product.name,
+        imageUrl: product.imageUrl,
+        unitsPerCase: product.unitsPerCase
+      });
+    } else if (user.role === "retailer") {
+      router.push(`/product/${product.id}`);
+    } else {
+      router.push("/supplier");
+    }
   };
 
   const heroOpacity = Math.max(0, 1 - scrollY / 500);
@@ -414,9 +431,10 @@ export default function HomePage() {
               return (
                 <div 
                   key={p.id}
-                  className="group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs hover:-translate-y-1 hover:shadow-md"
+                  onClick={() => handleProductCardClick(p)}
+                  className="group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs hover:-translate-y-1 hover:shadow-md cursor-pointer"
                 >
-                  <Link href={`/product/${p.id}`} className="block">
+                  <div>
                     {/* Снимка */}
                     <div className="relative aspect-square bg-[#FAF9F7] p-4 flex items-center justify-center overflow-hidden border-b border-[#F2F0EB]">
                       <img 
@@ -471,7 +489,7 @@ export default function HomePage() {
                         </div>
                       )}
                     </div>
-                  </Link>
+                  </div>
 
                   {/* Добавяне в кошница */}
                   <div className="p-3.5 pt-0">
@@ -479,12 +497,13 @@ export default function HomePage() {
                       isSupplier ? (
                         <Link
                           href="/supplier"
+                          onClick={(e) => e.stopPropagation()}
                           className="w-full py-2 bg-[#FAF9F7] hover:bg-[#EBE8E3] text-[#121212] rounded-md text-xs font-semibold flex items-center justify-center transition-all"
                         >
                           Управление в панела
                         </Link>
                       ) : (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center bg-[#FAF9F7] rounded-md border border-[#EBE8E3] p-0.5">
                             <button
                               onClick={() => handleQtyChange(p.id, -1)}
@@ -524,7 +543,10 @@ export default function HomePage() {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase });
+                        }}
                         className="w-full py-2 bg-[#FAF9F7] hover:bg-[#EBE8E3] text-[#121212] border border-[#EBE8E3] rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         <Lock className="w-3 h-3 text-[#737373]" />
@@ -589,6 +611,47 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* 8. WELCOME POPUP */}
+      {showWelcomePopup && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl border border-[#EBE8E3] text-[#121212] relative text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <button
+              onClick={handleDismissWelcome}
+              className="absolute top-4 right-4 text-[#737373] hover:text-[#121212] p-1 cursor-pointer transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="w-12 h-12 rounded-full bg-[#FAF9F7] border border-[#EBE8E3] flex items-center justify-center mx-auto text-[#121212]">
+              <Sparkles className="w-5 h-5" />
+            </div>
+
+            <div>
+              <span className="text-xl font-serif font-black tracking-[0.2em] uppercase">OPTOM</span>
+              <h3 className="text-2xl font-serif font-normal mt-2">Отключете заводските цени на едро</h3>
+              <p className="text-xs text-[#737373] mt-2 leading-relaxed">
+                Регистрирайте своя търговски обект за достъп до ценоразписи на производители, отложено плащане Net 60 дни и безплатна доставка.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={handleOpenRegisterFromPopup}
+                className="w-full py-3 bg-[#121212] hover:bg-neutral-800 text-white font-semibold text-xs rounded-md shadow-xs transition-all cursor-pointer"
+              >
+                Регистрация за търговски обекти
+              </button>
+              <button
+                onClick={handleDismissWelcome}
+                className="w-full py-2.5 text-xs text-[#737373] hover:text-[#121212] transition-colors cursor-pointer"
+              >
+                Продължи като гост
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!isSupplier && <CartDrawer />}
     </div>

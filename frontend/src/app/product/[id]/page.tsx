@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, 
   ShoppingBag, 
@@ -16,11 +16,7 @@ import {
   Heart, 
   Check, 
   Package, 
-  Building2,
-  Store,
-  ChevronRight,
-  Sparkles,
-  Info
+  Sparkles
 } from "lucide-react";
 import HeaderAuthButton from "@/components/HeaderAuthButton";
 import CartDrawer from "@/components/CartDrawer";
@@ -29,12 +25,12 @@ import { useCart, CartProduct, getTieredPrice } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 
 export default function ProductDetailPage() {
+  const router = useRouter();
   const params = useParams();
   const productId = params?.id ? String(params.id) : "";
 
   const { user, setIsAuthOpen, openAuthWithProduct } = useAuth();
   const { addToCart, setIsCartOpen, items: cartItems } = useCart();
-  const isSupplier = user?.role === "supplier";
 
   const [product, setProduct] = useState<CartProduct | null>(null);
   const [allProducts, setAllProducts] = useState<CartProduct[]>([]);
@@ -53,6 +49,16 @@ export default function ProductDetailPage() {
     }
     return "https://fairlike.onrender.com";
   };
+
+  // Route Guard: Разрешено само за влезли търговски купувачи (retailer)
+  useEffect(() => {
+    if (!loading && (!user || user.role !== "retailer")) {
+      router.replace("/");
+      if (!user) {
+        setIsAuthOpen(true);
+      }
+    }
+  }, [user, loading, router, setIsAuthOpen]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -96,19 +102,6 @@ export default function ProductDetailPage() {
 
   const handleAddToCart = () => {
     if (!product) return;
-    if (!user) {
-      openAuthWithProduct({
-        name: product.name,
-        imageUrl: product.imageUrl,
-        unitsPerCase: product.unitsPerCase
-      });
-      return;
-    }
-    if (isSupplier) {
-      alert("Като производител можете да управлявате артикулите си през Доставчик Панела.");
-      return;
-    }
-
     addToCart(product, selectedCases);
     setAddedAnimation(true);
     setTimeout(() => setAddedAnimation(false), 1500);
@@ -116,11 +109,11 @@ export default function ProductDetailPage() {
 
   const totalCartCases = cartItems.reduce((sum, item) => sum + item.quantityCases, 0);
 
-  if (loading) {
+  if (loading || !user || user.role !== "retailer") {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center">
         <div className="w-7 h-7 border-2 border-[#121212] border-t-transparent rounded-full animate-spin mb-3"></div>
-        <p className="text-xs text-[#737373]">Зареждане на детайлите за продукта...</p>
+        <p className="text-xs text-[#737373]">Проверка на B2B достъп...</p>
       </div>
     );
   }
@@ -138,7 +131,6 @@ export default function ProductDetailPage() {
   const lineTotal = selectedCases * effectivePrice;
   const unitWholesale = effectivePrice / (product.unitsPerCase || 1);
   const retailTotalPerCase = product.rrpPrice * product.unitsPerCase;
-  const totalMarginVal = Math.max(0, (retailTotalPerCase * selectedCases) - lineTotal);
   const marginPercent = retailTotalPerCase > 0 ? Math.round(((retailTotalPerCase - effectivePrice) / retailTotalPerCase) * 100) : 35;
 
   return (
@@ -148,13 +140,17 @@ export default function ProductDetailPage() {
       <div className="bg-[#FAF9F7] border-b border-[#EBE8E3] py-2 px-4 text-center text-xs text-[#525252]">
         <span>Официални заводски цени на стекове с </span>
         <strong className="text-[#121212]">Net 60 дни отсрочка</strong>
-        <span> за проверени търговски обекти.</span>
+        <span> за търговски обекти.</span>
       </div>
 
       {/* 2. HEADER */}
       <header className="sticky top-0 z-40 bg-white border-b border-[#EBE8E3]">
         <div className="max-w-[1360px] mx-auto px-4 sm:px-8 h-18 flex items-center justify-between gap-6">
           <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-1 text-xs font-semibold text-[#525252] hover:text-[#121212] transition-colors">
+              <ChevronLeft className="w-4 h-4" /> Каталог
+            </Link>
+            <div className="h-4 w-px bg-[#EBE8E3]" />
             <Link href="/" className="text-2xl font-serif font-black tracking-[0.2em] text-[#121212] uppercase shrink-0">
               OPTOM
             </Link>
@@ -167,25 +163,23 @@ export default function ProductDetailPage() {
           <div className="flex items-center gap-3">
             <HeaderAuthButton />
 
-            {!isSupplier && (
-              <button
-                onClick={() => user ? setIsCartOpen(true) : setIsAuthOpen(true)}
-                className="relative flex items-center gap-2 px-3.5 py-2 bg-[#121212] hover:bg-neutral-800 text-white rounded-md text-xs font-semibold shadow-xs transition-all cursor-pointer"
-              >
-                {user ? <ShoppingBag className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-neutral-400" />}
-                <span className="hidden sm:inline">Заявка</span>
-                {user && totalCartCases > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-white text-[#121212] text-[10px] font-bold flex items-center justify-center">
-                    {totalCartCases}
-                  </span>
-                )}
-              </button>
-            )}
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="relative flex items-center gap-2 px-3.5 py-2 bg-[#121212] hover:bg-neutral-800 text-white rounded-md text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Заявка</span>
+              {totalCartCases > 0 && (
+                <span className="w-4 h-4 rounded-full bg-white text-[#121212] text-[10px] font-bold flex items-center justify-center">
+                  {totalCartCases}
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </header>
 
-      {/* 3. SUPPLIER BRAND BAR (КАКТО В СКРИЙНШОТА) */}
+      {/* 3. SUPPLIER BRAND BAR */}
       <div className="border-b border-[#EBE8E3] bg-white">
         <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-3.5 flex items-center justify-between">
           <Link 
@@ -218,11 +212,11 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* 4. ОСНОВНА СЕКЦИЯ: ГАЛЕРИЯ + КУПУВАНЕ (2 КОЛОНИ) */}
+      {/* 4. DETAILS SECTION */}
       <main className="max-w-[1360px] mx-auto px-4 sm:px-8 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           
-          {/* ЛЯВА ЧАСТ: МРЕЖА СЪС СНИМКИ (FAIRE STYLE 2x2) */}
+          {/* ЛЯВА ЧАСТ: ГАЛЕРИЯ */}
           <div className="lg:col-span-7 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="aspect-square bg-[#FAF9F7] rounded-xl border border-[#EBE8E3] p-6 flex items-center justify-center overflow-hidden">
@@ -247,7 +241,6 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
-            {/* Описание и логистични детайли */}
             <div className="bg-[#FAF9F7] rounded-xl border border-[#EBE8E3] p-6 space-y-4">
               <div className="flex gap-4 border-b border-[#EBE8E3] pb-3 text-xs font-semibold">
                 <button
@@ -299,7 +292,7 @@ export default function ProductDetailPage() {
             </div>
           </div>
 
-          {/* ДЯСНА ЧАСТ: КАРТА ЗА ПОРЪЧКА & ЦЕНИ */}
+          {/* ДЯСНА ЧАСТ: КАРТА ЗА ПОРЪЧКА */}
           <div className="lg:col-span-5 space-y-6">
             <div>
               <div className="flex items-center justify-between text-xs text-[#737373] mb-1">
@@ -314,45 +307,27 @@ export default function ProductDetailPage() {
                 {product.name}
               </h1>
 
-              {/* Ценова секция */}
               <div className="mt-4 pb-4 border-b border-[#EBE8E3]">
-                {user ? (
-                  <div className="space-y-1">
-                    <div className="flex items-baseline gap-3">
-                      <span className="text-2xl font-bold font-mono text-[#121212]">
-                        {unitWholesale.toFixed(2)} лв.
-                      </span>
-                      <span className="text-xs text-[#737373]">
-                        MSRP рафт: <strong className="text-[#121212]">{product.rrpPrice.toFixed(2)} лв./бр.</strong>
-                      </span>
-                      <span className="text-xs font-mono font-bold bg-[#FAF9F7] text-[#121212] border border-[#EBE8E3] px-2 py-0.5 rounded">
-                        +{marginPercent}% Марж
-                      </span>
-                    </div>
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-2xl font-bold font-mono text-[#121212]">
+                      {unitWholesale.toFixed(2)} лв.
+                    </span>
+                    <span className="text-xs text-[#737373]">
+                      MSRP рафт: <strong className="text-[#121212]">{product.rrpPrice.toFixed(2)} лв./бр.</strong>
+                    </span>
+                    <span className="text-xs font-mono font-bold bg-[#FAF9F7] text-[#121212] border border-[#EBE8E3] px-2 py-0.5 rounded">
+                      +{marginPercent}% Марж
+                    </span>
+                  </div>
 
-                    <p className="text-xs text-[#737373] font-mono pt-1">
-                      Цена за 1 цял стек ({product.unitsPerCase} бр.): <strong>{effectivePrice.toFixed(2)} лв. без ДДС</strong>
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-[#FAF9F7] border border-[#EBE8E3] rounded-xl p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#121212] flex items-center gap-1.5">
-                        <Lock className="w-3.5 h-3.5" /> Заводска цена на едро
-                      </span>
-                      <span className="text-xs text-[#737373]">
-                        MSRP рафт: <strong>{product.rrpPrice.toFixed(2)} лв.</strong>
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[#737373]">
-                      Цените са видими само за проверени супермаркети, денонощни магазини и HoReCa.
-                    </p>
-                  </div>
-                )}
+                  <p className="text-xs text-[#737373] font-mono pt-1">
+                    Цена за 1 цял стек ({product.unitsPerCase} бр.): <strong>{effectivePrice.toFixed(2)} лв. без ДДС</strong>
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Избор на брой стекове */}
             <div className="space-y-3">
               <div className="flex justify-between items-center text-xs font-semibold">
                 <span>Количество (Стекове):</span>
@@ -374,7 +349,6 @@ export default function ProductDetailPage() {
                 <ChevronDown className="w-4 h-4 text-neutral-500 absolute right-3.5 top-3.5 pointer-events-none" />
               </div>
 
-              {/* Обемни отстъпки индикатор */}
               {product.hasTieredDiscount !== false && (
                 <div className="bg-[#FAF9F7] border border-[#EBE8E3] rounded-lg p-2.5 text-[11px] space-y-1 text-[#525252]">
                   <p className="font-semibold text-[#121212] flex items-center gap-1">
@@ -389,47 +363,27 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            {/* Бутон за поръчка */}
             <div className="space-y-2">
-              {user ? (
-                isSupplier ? (
-                  <Link
-                    href="/supplier"
-                    className="w-full py-3.5 bg-[#FAF9F7] hover:bg-[#EBE8E3] text-[#121212] border border-[#EBE8E3] font-semibold text-xs rounded-md shadow-xs flex items-center justify-center transition-all"
-                  >
-                    Редактирай цената в Доставчик Панел
-                  </Link>
+              <button
+                onClick={handleAddToCart}
+                className={`w-full py-3.5 rounded-md font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs ${
+                  addedAnimation
+                    ? "bg-[#121212] text-white"
+                    : "bg-[#121212] hover:bg-neutral-800 text-white"
+                }`}
+              >
+                {addedAnimation ? (
+                  <>
+                    <Check className="w-4 h-4 stroke-[3]" /> Добавено в заявката!
+                  </>
                 ) : (
-                  <button
-                    onClick={handleAddToCart}
-                    className={`w-full py-3.5 rounded-md font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs ${
-                      addedAnimation
-                        ? "bg-[#121212] text-white"
-                        : "bg-[#121212] hover:bg-neutral-800 text-white"
-                    }`}
-                  >
-                    {addedAnimation ? (
-                      <>
-                        <Check className="w-4 h-4 stroke-[3]" /> Добавено в заявката!
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingBag className="w-4 h-4" /> Добави в заявка &bull; {lineTotal.toFixed(2)} лв.
-                      </>
-                    )}
-                  </button>
-                )
-              ) : (
-                <button
-                  onClick={() => openAuthWithProduct({ name: product.name, imageUrl: product.imageUrl, unitsPerCase: product.unitsPerCase })}
-                  className="w-full py-3.5 bg-[#121212] hover:bg-neutral-800 text-white font-semibold text-xs rounded-md shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <Lock className="w-3.5 h-3.5" /> Отключи цена на едро &rarr;
-                </button>
-              )}
+                  <>
+                    <ShoppingBag className="w-4 h-4" /> Добави в заявка &bull; {lineTotal.toFixed(2)} лв.
+                  </>
+                )}
+              </button>
             </div>
 
-            {/* Доставка и B2B условия (Shipping & terms) */}
             <div className="border-t border-[#EBE8E3] pt-5 space-y-3.5 text-xs text-[#525252]">
               <h3 className="font-bold text-[#121212]">Доставка & Условия за презареждане</h3>
               
@@ -461,7 +415,7 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* 5. ОЩЕ ОТ СЪЩИЯ ПРОИЗВОДИТЕЛ (SHOP MORE FROM BRAND) */}
+        {/* 5. ОЩЕ ОТ СЪЩИЯ ПРОИЗВОДИТЕЛ */}
         {brandProducts.length > 0 && (
           <section className="mt-16 pt-10 border-t border-[#EBE8E3]">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -492,7 +446,7 @@ export default function ProductDetailPage() {
                     <h4 className="text-xs font-bold text-[#121212] line-clamp-2 h-8 leading-snug">{p.name}</h4>
                     <p className="text-[10px] text-[#737373] mt-1 font-mono">Стек: {p.unitsPerCase} бр.</p>
                     <div className="mt-2 text-xs font-mono font-bold text-[#121212]">
-                      {user ? `${p.casePrice.toFixed(2)} лв.` : "B2B цена"}
+                      {p.casePrice.toFixed(2)} лв.
                     </div>
                   </div>
                 </Link>
@@ -501,7 +455,7 @@ export default function ProductDetailPage() {
           </section>
         )}
 
-        {/* 6. ОТЗИВИ И РЕЙТИНГ (RATINGS & REVIEWS) */}
+        {/* 6. ОТЗИВИ */}
         <section className="mt-16 pt-10 border-t border-[#EBE8E3]">
           <div className="max-w-2xl">
             <h2 className="text-xl font-serif text-[#121212]">Отзиви от търговски обекти</h2>
@@ -539,7 +493,7 @@ export default function ProductDetailPage() {
           </div>
         </section>
 
-        {/* 7. ПОДОБНИ АРТИКУЛИ (SIMILAR PRODUCTS) */}
+        {/* 7. ПОДОБНИ АРТИКУЛИ */}
         {similarProducts.length > 0 && (
           <section className="mt-16 pt-10 border-t border-[#EBE8E3]">
             <h2 className="text-xl font-serif text-[#121212] mb-6">Подобни бързооборотни артикули</h2>
@@ -557,7 +511,7 @@ export default function ProductDetailPage() {
                     <h4 className="text-xs font-bold text-[#121212] line-clamp-2 h-8 leading-snug">{p.name}</h4>
                     <p className="text-[10px] text-[#737373] truncate mt-0.5">{p.supplierName}</p>
                     <div className="mt-2 text-xs font-mono font-bold text-[#121212]">
-                      {user ? `${p.casePrice.toFixed(2)} лв.` : "B2B цена"}
+                      {p.casePrice.toFixed(2)} лв.
                     </div>
                   </div>
                 </Link>
