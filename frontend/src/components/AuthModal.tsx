@@ -12,7 +12,7 @@ declare global {
 
 export default function AuthModal() {
   const { isAuthOpen, setIsAuthOpen, activeProductPreview, setAuthSession, login } = useAuth();
-  const [mode, setMode] = useState<"login" | "register">("register");
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [role, setRole] = useState<"retailer" | "supplier">("retailer");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -268,7 +268,11 @@ export default function AuthModal() {
         )}
 
         <h2 className="text-2xl font-serif font-normal text-[#121212] tracking-tight">
-          {mode === "register" ? "Unlock wholesale pricing" : "Вход в профила"}
+          {mode === "login" 
+            ? "Вход в профила" 
+            : role === "supplier" 
+              ? "Регистрация на фабрика" 
+              : "Unlock wholesale pricing"}
         </h2>
         <p className="text-xs text-[#737373] mt-1">
           {activeProductPreview ? (
@@ -285,6 +289,7 @@ export default function AuthModal() {
         )}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-3.5 text-left">
+          
           <div>
             <label className="block text-xs font-semibold text-[#121212] mb-1">
               Бизнес имейл (Business email) *
@@ -326,14 +331,14 @@ export default function AuthModal() {
             <div className="space-y-3 pt-1">
               <div>
                 <label className="block text-[11px] font-semibold text-[#121212] mb-1">
-                  Име на търговски обект / Фирма *
+                  {role === "supplier" ? "Име на фабриката / Бранд *" : "Име на търговски обект / Фирма *"}
                 </label>
                 <input
                   type="text"
                   required
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="напр. Минимаркет Надежда"
+                  placeholder={role === "supplier" ? "напр. Монделийз България" : "напр. Минимаркет Надежда"}
                   className="w-full text-xs px-3.5 py-2 bg-white border border-[#D5D1C8] rounded-md focus:outline-none focus:border-[#121212]"
                 />
               </div>
@@ -378,9 +383,9 @@ export default function AuthModal() {
           >
             {loading 
               ? "Обработка..." 
-              : mode === "register" 
-                ? "Sign up for free" 
-                : "Вход в профила"}
+              : mode === "login" 
+                ? "Вход в профила" 
+                : "Sign up for free"}
           </button>
 
           <button
@@ -395,7 +400,7 @@ export default function AuthModal() {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
             </svg>
-            <span>Sign up with Google</span>
+            <span>{mode === "login" ? "Sign in with Google" : "Sign up with Google"}</span>
           </button>
         </form>
 
@@ -408,7 +413,7 @@ export default function AuthModal() {
             {mode === "register" ? (
               <span>Вече имате профил? <button onClick={() => setMode("login")} className="font-semibold text-[#121212] underline cursor-pointer">Влезте тук</button></span>
             ) : (
-              <span>Нямате регистрация? <button onClick={() => setMode("register")} className="font-semibold text-[#121212] underline cursor-pointer">Регистрирайте се</button></span>
+              <span>Нямате регистрация? <button onClick={() => { setMode("register"); setRole("retailer"); }} className="font-semibold text-[#121212] underline cursor-pointer">Регистрирайте се</button></span>
             )}
           </div>
 
@@ -416,7 +421,7 @@ export default function AuthModal() {
             Are you a brand?{" "}
             <button
               onClick={() => {
-                setRole(role === "supplier" ? "retailer" : "supplier");
+                setRole("supplier");
                 setMode("register");
               }}
               className="font-semibold text-[#121212] underline cursor-pointer"
