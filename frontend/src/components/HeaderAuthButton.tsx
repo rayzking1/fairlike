@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { LogIn, LogOut, Building2, Store, FileText, PackagePlus } from "lucide-react";
+import { LogOut, Building2, Store, FileText, PackagePlus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 export default function HeaderAuthButton() {
@@ -10,25 +10,43 @@ export default function HeaderAuthButton() {
 
   if (!user) {
     return (
-      <button
-        onClick={() => setIsAuthOpen(true)}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#121212] hover:bg-neutral-800 text-white rounded-md text-xs font-semibold shadow-xs transition-all cursor-pointer"
-      >
-        <LogIn className="w-3.5 h-3.5" />
-        <span>Вход / Регистрация</span>
-      </button>
+      <div className="flex items-center gap-4 sm:gap-6 text-xs">
+        {/* 1. Sign up to sell (За производители / фабрики) */}
+        <button
+          onClick={() => setIsAuthOpen(true)}
+          className="text-[#525252] hover:text-[#121212] font-medium transition-colors cursor-pointer hidden md:inline-block"
+        >
+          Sign up to sell
+        </button>
+
+        {/* 2. Sign in (Вход за съществуващи потребители) */}
+        <button
+          onClick={() => setIsAuthOpen(true)}
+          className="text-[#121212] font-medium hover:underline transition-all cursor-pointer"
+        >
+          Sign in
+        </button>
+
+        {/* 3. Sign up to buy (Основен бутон тип Faire за регистрация на магазини) */}
+        <button
+          onClick={() => setIsAuthOpen(true)}
+          className="px-4 py-2 bg-[#262626] hover:bg-[#121212] text-white rounded-md font-semibold text-xs transition-all shadow-xs cursor-pointer"
+        >
+          Sign up to buy
+        </button>
+      </div>
     );
   }
 
   const isSupplier = user.role === "supplier";
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2.5 text-xs">
       {/* Бутон според ролята */}
       {isSupplier ? (
         <Link
           href="/supplier"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] text-[#121212] rounded-md text-xs font-semibold transition-all shadow-2xs"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] text-[#121212] rounded-md font-semibold transition-all shadow-2xs"
         >
           <PackagePlus className="w-3.5 h-3.5 text-[#121212]" />
           <span className="hidden sm:inline">Доставчик Панел</span>
@@ -36,7 +54,7 @@ export default function HeaderAuthButton() {
       ) : (
         <Link
           href="/orders"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] text-[#121212] rounded-md text-xs font-semibold transition-all shadow-2xs"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] text-[#121212] rounded-md font-semibold transition-all shadow-2xs"
         >
           <FileText className="w-3.5 h-3.5 text-[#121212]" />
           <span className="hidden sm:inline">Фактури & Заявки</span>
