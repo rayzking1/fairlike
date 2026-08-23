@@ -216,7 +216,6 @@ export default function HomePage() {
       {/* 2. HEADER */}
       <header className="sticky top-0 z-40 bg-white border-b border-[#EBE8E3]">
         <div className="max-w-[1360px] mx-auto px-4 sm:px-8 h-18 flex items-center justify-between gap-6">
-          
           <Link href="/" className="text-2xl font-serif font-black tracking-[0.2em] text-[#121212] uppercase shrink-0">
             OPTOM
           </Link>
@@ -415,10 +414,10 @@ export default function HomePage() {
               return (
                 <div 
                   key={p.id}
-                  onClick={() => !user && openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase })}
-                  className={`group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs hover:-translate-y-1 hover:shadow-md ${!user ? 'cursor-pointer' : ''}`}
+                  className="group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs hover:-translate-y-1 hover:shadow-md"
                 >
-                  <div>
+                  <Link href={`/product/${p.id}`} className="block">
+                    {/* Снимка */}
                     <div className="relative aspect-square bg-[#FAF9F7] p-4 flex items-center justify-center overflow-hidden border-b border-[#F2F0EB]">
                       <img 
                         src={p.imageUrl} 
@@ -438,9 +437,10 @@ export default function HomePage() {
                       )}
                     </div>
 
+                    {/* Детайли */}
                     <div className="p-3.5 space-y-2">
                       <div>
-                        <h3 className="text-xs font-bold text-[#121212] line-clamp-2 h-8 leading-snug">
+                        <h3 className="text-xs font-bold text-[#121212] line-clamp-2 h-8 leading-snug group-hover:underline">
                           {p.name}
                         </h3>
                         <p className="text-[11px] text-[#737373] mt-0.5 truncate font-medium">
@@ -471,8 +471,9 @@ export default function HomePage() {
                         </div>
                       )}
                     </div>
-                  </div>
+                  </Link>
 
+                  {/* Добавяне в кошница */}
                   <div className="p-3.5 pt-0">
                     {user ? (
                       isSupplier ? (
@@ -486,14 +487,14 @@ export default function HomePage() {
                         <div className="flex items-center gap-1.5">
                           <div className="flex items-center bg-[#FAF9F7] rounded-md border border-[#EBE8E3] p-0.5">
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleQtyChange(p.id, -1); }}
+                              onClick={() => handleQtyChange(p.id, -1)}
                               className="w-5 h-5 flex items-center justify-center text-neutral-600 hover:bg-white rounded cursor-pointer"
                             >
                               <Minus className="w-2.5 h-2.5" />
                             </button>
                             <span className="w-4 text-center text-xs font-bold font-mono text-[#121212]">{qty}</span>
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleQtyChange(p.id, 1); }}
+                              onClick={() => handleQtyChange(p.id, 1)}
                               className="w-5 h-5 flex items-center justify-center text-neutral-600 hover:bg-white rounded cursor-pointer"
                             >
                               <Plus className="w-2.5 h-2.5" />
@@ -501,7 +502,7 @@ export default function HomePage() {
                           </div>
 
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleAddOrAuth(p); }}
+                            onClick={() => handleAddOrAuth(p)}
                             className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                               addedAnimation === p.id
                                 ? "bg-[#121212] text-white"
@@ -523,10 +524,7 @@ export default function HomePage() {
                     ) : (
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase });
-                        }}
+                        onClick={() => openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase })}
                         className="w-full py-2 bg-[#FAF9F7] hover:bg-[#EBE8E3] text-[#121212] border border-[#EBE8E3] rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         <Lock className="w-3 h-3 text-[#737373]" />
@@ -591,47 +589,6 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
-
-      {/* 8. WELCOME POPUP */}
-      {showWelcomePopup && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl border border-[#EBE8E3] text-[#121212] relative text-center space-y-5 animate-in zoom-in-95 duration-200">
-            <button
-              onClick={handleDismissWelcome}
-              className="absolute top-4 right-4 text-[#737373] hover:text-[#121212] p-1 cursor-pointer transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="w-12 h-12 rounded-full bg-[#FAF9F7] border border-[#EBE8E3] flex items-center justify-center mx-auto text-[#121212]">
-              <Sparkles className="w-5 h-5" />
-            </div>
-
-            <div>
-              <span className="text-xl font-serif font-black tracking-[0.2em] uppercase">OPTOM</span>
-              <h3 className="text-2xl font-serif font-normal mt-2">Отключете заводските цени на едро</h3>
-              <p className="text-xs text-[#737373] mt-2 leading-relaxed">
-                Регистрирайте своя търговски обект за достъп до ценоразписи на производители, отложено плащане Net 60 дни и безплатна доставка.
-              </p>
-            </div>
-
-            <div className="space-y-2 pt-2">
-              <button
-                onClick={handleOpenRegisterFromPopup}
-                className="w-full py-3 bg-[#121212] hover:bg-neutral-800 text-white font-semibold text-xs rounded-md shadow-xs transition-all cursor-pointer"
-              >
-                Регистрация за търговски обекти
-              </button>
-              <button
-                onClick={handleDismissWelcome}
-                className="w-full py-2.5 text-xs text-[#737373] hover:text-[#121212] transition-colors cursor-pointer"
-              >
-                Продължи като гост
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {!isSupplier && <CartDrawer />}
     </div>

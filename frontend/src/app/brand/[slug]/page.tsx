@@ -240,10 +240,9 @@ export default function BrandStorefrontPage() {
               return (
                 <div 
                   key={p.id}
-                  onClick={() => !user && openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase })}
-                  className={`group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs ${!user ? 'cursor-pointer' : ''}`}
+                  className="group bg-white rounded-xl border border-[#EBE8E3] hover:border-[#121212] transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-2xs hover:-translate-y-1 hover:shadow-md"
                 >
-                  <div>
+                  <Link href={`/product/${p.id}`} className="block">
                     <div className="relative aspect-square bg-[#FAF9F7] p-4 flex items-center justify-center overflow-hidden border-b border-[#F2F0EB]">
                       <img 
                         src={p.imageUrl} 
@@ -265,7 +264,7 @@ export default function BrandStorefrontPage() {
 
                     <div className="p-3.5 space-y-2">
                       <div>
-                        <h3 className="text-xs font-bold text-[#121212] line-clamp-2 h-8 leading-snug">
+                        <h3 className="text-xs font-bold text-[#121212] line-clamp-2 h-8 leading-snug group-hover:underline">
                           {p.name}
                         </h3>
                         <p className="text-[11px] text-[#737373] mt-0.5 truncate font-medium">
@@ -296,7 +295,7 @@ export default function BrandStorefrontPage() {
                         </div>
                       )}
                     </div>
-                  </div>
+                  </Link>
 
                   <div className="p-3.5 pt-0">
                     {user ? (
@@ -311,14 +310,14 @@ export default function BrandStorefrontPage() {
                         <div className="flex items-center gap-1.5">
                           <div className="flex items-center bg-[#FAF9F7] rounded-md border border-[#EBE8E3] p-0.5">
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleQtyChange(p.id, -1); }}
+                              onClick={() => handleQtyChange(p.id, -1)}
                               className="w-5 h-5 flex items-center justify-center text-neutral-600 hover:bg-white rounded cursor-pointer"
                             >
                               <Minus className="w-2.5 h-2.5" />
                             </button>
                             <span className="w-4 text-center text-xs font-bold font-mono text-[#121212]">{qty}</span>
                             <button
-                              onClick={(e) => { e.stopPropagation(); handleQtyChange(p.id, 1); }}
+                              onClick={() => handleQtyChange(p.id, 1)}
                               className="w-5 h-5 flex items-center justify-center text-neutral-600 hover:bg-white rounded cursor-pointer"
                             >
                               <Plus className="w-2.5 h-2.5" />
@@ -326,7 +325,7 @@ export default function BrandStorefrontPage() {
                           </div>
 
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleAddOrAuth(p); }}
+                            onClick={() => handleAddOrAuth(p)}
                             className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                               addedAnimation === p.id
                                 ? "bg-[#121212] text-white"
@@ -348,10 +347,7 @@ export default function BrandStorefrontPage() {
                     ) : (
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase });
-                        }}
+                        onClick={() => openAuthWithProduct({ name: p.name, imageUrl: p.imageUrl, unitsPerCase: p.unitsPerCase })}
                         className="w-full py-2 bg-[#FAF9F7] hover:bg-[#EBE8E3] text-[#121212] border border-[#EBE8E3] rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         <Lock className="w-3 h-3 text-[#737373]" />
