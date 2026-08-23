@@ -6,30 +6,30 @@ import { LogOut, Building2, Store, FileText, PackagePlus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 export default function HeaderAuthButton() {
-  const { user, logout, setIsAuthOpen } = useAuth();
+  const { user, logout, openAuthMode } = useAuth();
 
   if (!user) {
     return (
       <div className="flex items-center gap-4 sm:gap-6 text-xs">
-        {/* 1. Sign up to sell (За производители / фабрики) */}
+        {/* 1. Sign up to sell -> Отваря Регистрация за Фабрика/Вносител */}
         <button
-          onClick={() => setIsAuthOpen(true)}
+          onClick={() => openAuthMode("register", "supplier")}
           className="text-[#525252] hover:text-[#121212] font-medium transition-colors cursor-pointer hidden md:inline-block"
         >
           Sign up to sell
         </button>
 
-        {/* 2. Sign in (Вход за съществуващи потребители) */}
+        {/* 2. Sign in -> Отваря Вход */}
         <button
-          onClick={() => setIsAuthOpen(true)}
+          onClick={() => openAuthMode("login")}
           className="text-[#121212] font-medium hover:underline transition-all cursor-pointer"
         >
           Sign in
         </button>
 
-        {/* 3. Sign up to buy (Основен бутон тип Faire за регистрация на магазини) */}
+        {/* 3. Sign up to buy -> Отваря Регистрация за Магазини/Купувачи */}
         <button
-          onClick={() => setIsAuthOpen(true)}
+          onClick={() => openAuthMode("register", "retailer")}
           className="px-4 py-2 bg-[#262626] hover:bg-[#121212] text-white rounded-md font-semibold text-xs transition-all shadow-xs cursor-pointer"
         >
           Sign up to buy
@@ -42,7 +42,6 @@ export default function HeaderAuthButton() {
 
   return (
     <div className="flex items-center gap-2.5 text-xs">
-      {/* Бутон според ролята */}
       {isSupplier ? (
         <Link
           href="/supplier"
@@ -61,7 +60,6 @@ export default function HeaderAuthButton() {
         </Link>
       )}
 
-      {/* Профилен бейдж */}
       <div className="flex items-center gap-2 px-2.5 py-1 bg-white border border-[#EBE8E3] rounded-md">
         {isSupplier ? (
           <Building2 className="w-3.5 h-3.5 text-[#121212] shrink-0" />
@@ -78,7 +76,6 @@ export default function HeaderAuthButton() {
         </div>
       </div>
 
-      {/* Бутон за изход */}
       <button
         onClick={logout}
         title="Изход от профила"

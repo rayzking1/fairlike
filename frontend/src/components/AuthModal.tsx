@@ -11,7 +11,16 @@ declare global {
 }
 
 export default function AuthModal() {
-  const { isAuthOpen, setIsAuthOpen, activeProductPreview, setAuthSession, login } = useAuth();
+  const { 
+    isAuthOpen, 
+    setIsAuthOpen, 
+    activeProductPreview, 
+    authInitialMode, 
+    authInitialRole, 
+    setAuthSession, 
+    login 
+  } = useAuth();
+
   const [mode, setMode] = useState<"login" | "register">("login");
   const [role, setRole] = useState<"retailer" | "supplier">("retailer");
   const [showPassword, setShowPassword] = useState(false);
@@ -25,6 +34,14 @@ export default function AuthModal() {
   const [mol, setMol] = useState("");
   const [address, setAddress] = useState("");
   const [eikStatus, setEikStatus] = useState<{ valid: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    if (isAuthOpen) {
+      setMode(authInitialMode);
+      setRole(authInitialRole);
+      setError(null);
+    }
+  }, [isAuthOpen, authInitialMode, authInitialRole]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {

@@ -25,8 +25,11 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthOpen: boolean;
+  authInitialMode: "login" | "register";
+  authInitialRole: "retailer" | "supplier";
   activeProductPreview: LockedProductPreview | null;
   setIsAuthOpen: (open: boolean) => void;
+  openAuthMode: (mode: "login" | "register", role?: "retailer" | "supplier") => void;
   openAuthWithProduct: (product: LockedProductPreview) => void;
   setAuthSession: (user: User, token?: string) => void;
   login: (userDataOrEmail: User | string, roleOrCompany?: string) => void;
@@ -42,6 +45,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState<"login" | "register">("login");
+  const [authInitialRole, setAuthInitialRole] = useState<"retailer" | "supplier">("retailer");
   const [activeProductPreview, setActiveProductPreview] = useState<LockedProductPreview | null>(null);
 
   useEffect(() => {
@@ -62,8 +67,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const openAuthMode = (mode: "login" | "register", role: "retailer" | "supplier" = "retailer") => {
+    setAuthInitialMode(mode);
+    setAuthInitialRole(role);
+    setActiveProductPreview(null);
+    setIsAuthOpen(true);
+  };
+
   const openAuthWithProduct = (product: LockedProductPreview) => {
     setActiveProductPreview(product);
+    setAuthInitialMode("register");
+    setAuthInitialRole("retailer");
     setIsAuthOpen(true);
   };
 
@@ -122,8 +136,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         isAuthOpen,
+        authInitialMode,
+        authInitialRole,
         activeProductPreview,
         setIsAuthOpen: handleSetIsAuthOpen,
+        openAuthMode,
         openAuthWithProduct,
         setAuthSession,
         login,
