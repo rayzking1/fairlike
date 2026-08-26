@@ -41,7 +41,7 @@ def run_auto_migrations():
 
 run_auto_migrations()
 
-def seed_initial_products():
+def # seed_initial_products removed:
     db = SessionLocal()
     try:
         if db.query(models.Product).count() == 0:
@@ -122,7 +122,7 @@ def seed_initial_products():
     finally:
         db.close()
 
-seed_initial_products()
+# seed_initial_products removed
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 resend.api_key = RESEND_API_KEY
