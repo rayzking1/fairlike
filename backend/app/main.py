@@ -41,7 +41,7 @@ def run_auto_migrations():
 
 run_auto_migrations()
 
-def # seed_initial_products removed:
+
     db = SessionLocal()
     try:
         if db.query(models.Product).count() == 0:
