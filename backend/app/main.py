@@ -5,14 +5,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import date, timedelta
-from jinja2 import Environment, FileSystemLoader, Template
-from weasyprint import HTML
-import pandas as pd
 import uuid
 import os
-import io
-import resend
 
 import models
 from database import engine, get_db, SessionLocal
@@ -20,26 +14,6 @@ from routers.invoices import router as invoices_router
 from routers.auth import router as auth_router, get_optional_user
 
 models.Base.metadata.create_all(bind=engine)
-
-def run_auto_migrations():
-    with engine.connect() as conn:
-        columns_to_add = [
-            ("in_stock", "BOOLEAN DEFAULT TRUE"),
-            ("has_tiered_discount", "BOOLEAN DEFAULT TRUE"),
-            ("tier1_qty", "INTEGER DEFAULT 5"),
-            ("tier1_discount", "FLOAT DEFAULT 5.0"),
-            ("tier2_qty", "INTEGER DEFAULT 10"),
-            ("tier2_discount", "FLOAT DEFAULT 10.0"),
-            ("supplier_id", "VARCHAR"),
-        ]
-        for col_name, col_type in columns_to_add:
-            try:
-                conn.execute(text(f"ALTER TABLE products ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
-                conn.commit()
-            except Exception:
-                pass
-
-run_auto_migrations()
 
 def seed_initial_products():
     db = SessionLocal()
@@ -124,17 +98,6 @@ def seed_initial_products():
 
 seed_initial_products()
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-possible_template_paths = [
-    os.path.join(current_dir, "templates"),
-    os.path.join(current_dir, "..", "templates"),
-    os.path.join(os.getcwd(), "templates"),
-    os.path.join(os.getcwd(), "backend", "templates"),
-    os.path.join(os.getcwd(), "backend", "app", "templates"),
-]
-valid_template_dirs = [p for p in possible_template_paths if os.path.isdir(p)]
-jinja_env = Environment(loader=FileSystemLoader(valid_template_dirs if valid_template_dirs else [current_dir]))
-
 app = FastAPI(title="OPTOM.BG API", version="1.0.0")
 
 app.add_middleware(
@@ -147,6 +110,27 @@ app.add_middleware(
 
 app.include_router(invoices_router)
 app.include_router(auth_router)
+
+class ProductSchema(BaseModel):
+    id: str
+    name: str
+    category: str
+    barcode: str
+    supplierName: str
+    supplierMinimum: Optional[float] = 50.0
+    unitsPerCase: int
+    casePrice: float
+    rrpPrice: float
+    imageUrl: str
+    inStock: Optional[bool] = True
+    hasTieredDiscount: Optional[bool] = True
+    tier1Qty: Optional[int] = 5
+    tier1Discount: Optional[float] = 5.0
+    tier2Qty: Optional[int] = 10
+    tier2Discount: Optional[float] = 10.0
+
+    class Config:
+        from_attributes = True
 
 @app.get("/")
 def root():
