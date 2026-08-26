@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import AuthModal from "@/components/AuthModal";
+import CartReminderToast from "@/components/CartReminderToast";
 
 const inter = Inter({ subsets: ["latin", "cyrillic"] });
 
@@ -24,6 +25,7 @@ export default function RootLayout({
           <CartProvider>
             {children}
             <AuthModal />
+            <CartReminderToast />
           </CartProvider>
         </AuthProvider>
       </body>
