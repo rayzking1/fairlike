@@ -303,3 +303,69 @@ def trigger_direct_email(order_dict: dict, items_data: list):
         resend.Emails.send(email_params)
     except Exception as e:
         print(f"Resend error: {e}")
+
+
+@app.post("/api/products/import")
+async def import_products_excel(
+    file: UploadFile = File(...),
+    current_user: Optional[models.User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user or current_user.role != "supplier":
+        raise HTTPException(status_code=403, detail="Само регистрирани доставчици могат да качват ценоразписи.")
+    
+    contents = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Грешка при четене на файла: {str(e)}")
+
+    imported_count = 0
+    for _, row in df.iterrows():
+        name = str(row.get("name") or row.get("Име на артикул") or "").strip()
+        if not name:
+            continue
+        
+        barcode = str(row.get("barcode") or row.get("Баркод") or f"3800{imported_count}").strip()
+        case_price = float(row.get("case_price") or row.get("Цена на стек (лв)") or 20.0)
+        rrp_price = float(row.get("rrp_price") or row.get("Препоръчителна цена за 1бр (лв)") or 2.5)
+        units_per_case = int(row.get("units_per_case") or row.get("Брой в стек") or 24)
+        category = str(row.get("category") or row.get("Категория") or "Безалкохолни & Води").strip()
+        image_url = str(row.get("imageUrl") or row.get("image_url") or row.get("Линк към снимка") or "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80").strip()
+
+        existing = db.query(models.Product).filter(models.Product.barcode == barcode).first()
+        if existing:
+            existing.name = name
+            existing.casePrice = case_price
+            existing.rrpPrice = rrp_price
+            existing.unitsPerCase = units_per_case
+            existing.category = category
+            existing.supplierName = current_user.company_name
+            existing.supplier_id = current_user.id
+            existing.imageUrl = image_url
+        else:
+            new_prod = models.Product(
+                id=str(uuid.uuid4())[:8],
+                name=name,
+                barcode=barcode,
+                casePrice=case_price,
+                rrpPrice=rrp_price,
+                unitsPerCase=units_per_case,
+                category=category,
+                supplierName=current_user.company_name,
+                supplier_id=current_user.id,
+                imageUrl=image_url,
+                supplierMinimum=50.0,
+                hasTieredDiscount=True,
+                tier1Qty=5,
+                tier1Discount=5.0,
+                tier2Qty=10,
+                tier2Discount=10.0
+            )
+            db.add(new_prod)
+        imported_count += 1
+
+    db.commit()
