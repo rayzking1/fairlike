@@ -209,3 +209,97 @@ def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks
     db.commit()
     db.refresh(db_order)
     return {"status": "success", "orderId": order_id}
+
+import resend
+
+def generate_order_invoice_pdf(order_dict: dict, items_data: list) -> bytes:
+    try:
+        issue_date = date.today()
+        payment_term = order_dict.get("paymentTerms", "net60")
+        due_date = issue_date + timedelta(days=60 if payment_term == "net60" else (30 if payment_term == "net30" else 0))
+        payment_label = "Net 60 дни" if payment_term == "net60" else ("Net 30 дни" if payment_term == "net30" else "Веднага (-2%)")
+
+        context = {
+            "doc_type_label": "B2B Фактура / Проформа",
+            "invoice_number": f"1000{order_dict['id']}",
+            "issue_date": issue_date.strftime("%d.%m.%Y"),
+            "tax_event_date": issue_date.strftime("%d.%m.%Y"),
+            "payment_terms_label": payment_label,
+            "due_date": due_date.strftime("%d.%m.%Y"),
+            "supplier": {
+                "name": "OPTOM.BG / Официален Дистрибутор",
+                "eik": "206894123",
+                "vat_number": "BG206894123",
+                "address": "гр. София, бул. Цариградско шосе 115",
+                "mol": "Димитър Петров",
+                "iban": "BG80UNCR70001523984512",
+                "bank_name": "УниКредит Булбанк"
+            },
+            "buyer": {
+                "name": order_dict["storeName"],
+                "eik": order_dict.get("eik") or "Не е посочен",
+                "vat_number": f"BG{order_dict['eik']}" if order_dict.get("eik") else "Нерегистриран по ЗДДС",
+                "address": order_dict["address"],
+                "mol": order_dict["storeName"],
+                "email": order_dict["invoiceEmail"]
+            },
+            "items": items_data,
+            "subtotal": order_dict["subtotal"],
+            "discount_percent": 0.0,
+            "discount_amount": 0.0,
+            "taxable_base": order_dict["subtotal"],
+            "vat_rate": 20.0,
+            "vat_amount": order_dict["vat"],
+            "total_due": order_dict["total"]
+        }
+
+        template = jinja_env.get_template("invoice_template.html")
+        rendered_html = template.render(**context)
+        pdf_io = io.BytesIO()
+        HTML(string=rendered_html).write_pdf(pdf_io)
+        return pdf_io.getvalue()
+    except Exception as e:
+        print(f"⚠️ PDF error: {e}")
+        return b""
+
+def trigger_direct_email(order_dict: dict, items_data: list):
+    active_key = os.getenv("RESEND_API_KEY", "")
+    if not active_key:
+        return
+    resend.api_key = active_key
+
+    items_html = "".join([
+        f"<tr><td style='padding: 8px; border-bottom: 1px solid #e2e8f0;'><strong>{it.get('name', 'Стек')}</strong></td>"
+        f"<td style='padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: center;'>{it.get('quantity', 1)} бр.</td>"
+        f"<td style='padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-family: monospace;'>{it.get('total_price', 0):.2f} лв.</td></tr>"
+        for it in items_data
+    ])
+
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; color: #0f172a; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px;">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 900;">OPTOM<span style="color: #059669;">.BG</span></h1>
+        <h2>Здравейте, {order_dict['storeName']}!</h2>
+        <p>Вашата поръчка с номер <strong>#{order_dict['id']}</strong> беше приета успешно.</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">{items_html}</table>
+        <p style="font-size: 16px; font-weight: bold;">Общо с ДДС: {order_dict['total']:.2f} лв.</p>
+    </div>
+    """
+
+    email_params = {
+        "from": "OPTOM.BG <onboarding@resend.dev>",
+        "to": [order_dict["invoiceEmail"]],
+        "subject": f"Потвърждение за зареждане #{order_dict['id']} - OPTOM.BG",
+        "html": html_content
+    }
+
+    pdf_bytes = generate_order_invoice_pdf(order_dict, items_data)
+    if pdf_bytes and len(pdf_bytes) > 100:
+        email_params["attachments"] = [{
+            "filename": f"Faktura_{order_dict['id']}.pdf",
+            "content": list(pdf_bytes)
+        }]
+
+    try:
+        resend.Emails.send(email_params)
+    except Exception as e:
+        print(f"Resend error: {e}")
