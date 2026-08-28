@@ -151,3 +151,61 @@ def search_products(q: str = "", db: Session = Depends(get_db)):
 @app.get("/api/products", response_model=List[ProductSchema])
 def get_products(db: Session = Depends(get_db)):
     return db.query(models.Product).order_by(models.Product.name.asc()).all()
+
+class OrderItemSchema(BaseModel):
+    productId: str
+    quantityCases: int
+    casePrice: float
+
+class CreateOrderRequest(BaseModel):
+    storeName: str
+    invoiceEmail: str
+    address: str
+    eik: Optional[str] = ""
+    paymentTerms: Optional[str] = "net60"
+    items: List[OrderItemSchema]
+    subtotal: float
+    vat: float
+    total: float
+    estimatedProfit: Optional[float] = 0.0
+
+@app.get("/api/orders")
+def get_orders(email: Optional[str] = None, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    query = db.query(models.Order)
+    if current_user:
+        query = query.filter((models.Order.user_id == current_user.id) | (models.Order.invoiceEmail == current_user.email))
+    elif email:
+        query = query.filter(models.Order.invoiceEmail == email)
+    return query.order_by(models.Order.created_at.desc()).all()
+
+@app.post("/api/orders")
+def create_order(order_in: CreateOrderRequest, background_tasks: BackgroundTasks, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    order_id = str(uuid.uuid4())[:8].upper()
+    db_order = models.Order(
+        id=order_id,
+        storeName=order_in.storeName,
+        invoiceEmail=order_in.invoiceEmail,
+        address=order_in.address,
+        eik=order_in.eik,
+        paymentTerms=order_in.paymentTerms,
+        subtotal=order_in.subtotal,
+        vat=order_in.vat,
+        total=order_in.total,
+        estimatedProfit=order_in.estimatedProfit,
+        status="pending",
+        user_id=current_user.id if current_user else None
+    )
+    db.add(db_order)
+
+    for it in order_in.items:
+        db_item = models.OrderItem(
+            order_id=order_id,
+            product_id=it.productId,
+            quantity_cases=it.quantityCases,
+            case_price=it.casePrice
+        )
+        db.add(db_item)
+
+    db.commit()
+    db.refresh(db_order)
+    return {"status": "success", "orderId": order_id}
