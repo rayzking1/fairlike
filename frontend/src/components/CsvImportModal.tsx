@@ -57,7 +57,11 @@ export default function CsvImportModal({ isOpen, onClose, onSuccess }: Props) {
     formData.append("file", file);
 
     try {
+      const token = localStorage.getItem("optom_b2b_token");
       const res = await fetch(`${baseUrl}/api/products/import`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
         method: "POST",
         body: formData,
       });
