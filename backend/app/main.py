@@ -7,6 +7,14 @@ from pydantic import BaseModel
 from typing import List, Optional
 import uuid
 import os
+import io
+import pandas as pd
+from weasyprint import HTML
+from jinja2 import Environment, FileSystemLoader
+
+templates_dir = os.path.join(os.path.dirname(__file__), "templates")
+jinja_env = Environment(loader=FileSystemLoader(templates_dir))
+
 
 import models
 from database import engine, get_db, SessionLocal

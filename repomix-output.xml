@@ -2809,6 +2809,12 @@ def get_me(current_user: models.User = Depends(get_current_user)):
         "mol": current_user.mol,
         "role": current_user.role
     }
+
+@router.get("/validate-eik/{eik}")
+def validate_eik(eik: str):
+    if len(eik) in (9, 13) and eik.isdigit():
+        return {"valid": True, "message": "ЕИК е валиден"}
+    return {"valid": False, "message": "Невалиден формат на ЕИК"}
 </file>
 
 <file path="frontend/src/app/brand/[slug]/page.tsx">
@@ -3456,198 +3462,6 @@ export default function LiveSearch() {
 }
 </file>
 
-<file path="frontend/src/context/CartContext.tsx">
-"use client";
-
-import React, { createContext, useContext, useState, useEffect } from "react";
-
-export interface CartProduct {
-  id: string;
-  name: string;
-  category: string;
-  barcode: string;
-  supplierName: string;
-  supplierMinimum: number;
-  unitsPerCase: number;
-  casePrice: number;
-  rrpPrice: number;
-  imageUrl: string;
-  hasTieredDiscount?: boolean;
-  has_tiered_discount?: boolean;
-  tier1Qty?: number;
-  tier1_qty?: number;
-  tier1Discount?: number;
-  tier1_discount?: number;
-  tier2Qty?: number;
-  tier2_qty?: number;
-  tier2Discount?: number;
-  tier2_discount?: number;
-}
-
-export interface CartItem {
-  product: CartProduct;
-  quantityCases: number;
-}
-
-export function getTieredPrice(product: CartProduct, cases: number): { effectivePrice: number; discountPercent: number } {
-  if (!product || !product.casePrice) {
-    return { effectivePrice: 0, discountPercent: 0 };
-  }
-
-  const isEnabled = product.hasTieredDiscount !== false && product.has_tiered_discount !== false;
-  if (!isEnabled) {
-    return { effectivePrice: product.casePrice, discountPercent: 0 };
-  }
-
-  const t2Qty = Number(product.tier2Qty ?? product.tier2_qty ?? 10);
-  const t2Disc = Number(product.tier2Discount ?? product.tier2_discount ?? 10.0);
-  const t1Qty = Number(product.tier1Qty ?? product.tier1_qty ?? 5);
-  const t1Disc = Number(product.tier1Discount ?? product.tier1_discount ?? 5.0);
-
-  if (cases >= t2Qty && t2Disc > 0) {
-    const discounted = product.casePrice * (1 - t2Disc / 100);
-    return { effectivePrice: Math.round(discounted * 100) / 100, discountPercent: t2Disc };
-  } else if (cases >= t1Qty && t1Disc > 0) {
-    const discounted = product.casePrice * (1 - t1Disc / 100);
-    return { effectivePrice: Math.round(discounted * 100) / 100, discountPercent: t1Disc };
-  }
-
-  return { effectivePrice: product.casePrice, discountPercent: 0 };
-}
-
-interface CartContextType {
-  isCartOpen: boolean;
-  setIsCartOpen: (open: boolean) => void;
-  items: CartItem[];
-  addToCart: (product: CartProduct, cases?: number) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
-  removeFromCart: (productId: string) => void;
-  clearCart: () => void;
-  cartTotal: number;
-  vatAmount: number;
-  grandTotal: number;
-  estimatedTotalProfit: number;
-  totalSavedFromTiers: number;
-}
-
-const CartContext = createContext<CartContextType | undefined>(undefined);
-
-export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [items, setItems] = useState<CartItem[]>([]);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("optom_cart");
-      if (saved) {
-        setItems(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.error("Грешка при зареждане на количката:", e);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("optom_cart", JSON.stringify(items));
-    } catch (e) {}
-  }, [items]);
-
-  const addToCart = (product: CartProduct, cases: number = 1) => {
-    setItems((prev) => {
-      const existing = prev.find((it) => it.product.id === product.id);
-      if (existing) {
-        return prev.map((it) =>
-          it.product.id === product.id
-            ? { ...it, quantityCases: it.quantityCases + cases }
-            : it
-        );
-      }
-      return [...prev, { product, quantityCases: cases }];
-    });
-    setIsCartOpen(true);
-  };
-
-  useEffect(() => {
-    const handleGlobalAddToCart = (event: Event) => {
-      const customEvent = event as CustomEvent<CartProduct>;
-      if (customEvent.detail) {
-        addToCart(customEvent.detail, 1);
-      }
-    };
-    window.addEventListener("optom:add-to-cart", handleGlobalAddToCart);
-    return () => window.removeEventListener("optom:add-to-cart", handleGlobalAddToCart);
-  }, []);
-
-  const updateQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    setItems((prev) =>
-      prev.map((it) =>
-        it.product.id === productId ? { ...it, quantityCases: quantity } : it
-      )
-    );
-  };
-
-  const removeFromCart = (productId: string) => {
-    setItems((prev) => prev.filter((it) => it.product.id !== productId));
-  };
-
-  const clearCart = () => {
-    setItems([]);
-  };
-
-  const cartTotal = items.reduce((sum, it) => {
-    const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
-    return sum + it.quantityCases * effectivePrice;
-  }, 0);
-
-  const originalTotalNoDiscount = items.reduce((sum, it) => {
-    return sum + it.quantityCases * it.product.casePrice;
-  }, 0);
-
-  const totalSavedFromTiers = Math.max(0, originalTotalNoDiscount - cartTotal);
-  const vatAmount = +(cartTotal * 0.20).toFixed(2);
-  const grandTotal = +(cartTotal + vatAmount).toFixed(2);
-
-  const estimatedTotalProfit = items.reduce((sum, it) => {
-    const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
-    const revenuePerCase = it.product.rrpPrice * it.product.unitsPerCase;
-    const profitPerCase = Math.max(0, revenuePerCase - effectivePrice);
-    return sum + profitPerCase * it.quantityCases;
-  }, 0);
-
-  return (
-    <CartContext.Provider
-      value={{
-        isCartOpen,
-        setIsCartOpen,
-        items,
-        addToCart,
-        updateQuantity,
-        removeFromCart,
-        clearCart,
-        cartTotal,
-        vatAmount,
-        grandTotal,
-        estimatedTotalProfit,
-        totalSavedFromTiers,
-      }}
-    >
-      {children}
-    </CartContext.Provider>
-  );
-}
-
-export function useCart() {
-  const context = useContext(CartContext);
-  if (!context) throw new Error("useCart must be used within a CartProvider");
-  return context;
-}
-</file>
-
 <file path="frontend/src/app/orders/page.tsx">
 "use client";
 
@@ -4014,6 +3828,198 @@ export default function OrdersPage() {
       <CartDrawer />
     </div>
   );
+}
+</file>
+
+<file path="frontend/src/context/CartContext.tsx">
+"use client";
+
+import React, { createContext, useContext, useState, useEffect } from "react";
+
+export interface CartProduct {
+  id: string;
+  name: string;
+  category: string;
+  barcode: string;
+  supplierName: string;
+  supplierMinimum: number;
+  unitsPerCase: number;
+  casePrice: number;
+  rrpPrice: number;
+  imageUrl: string;
+  hasTieredDiscount?: boolean;
+  has_tiered_discount?: boolean;
+  tier1Qty?: number;
+  tier1_qty?: number;
+  tier1Discount?: number;
+  tier1_discount?: number;
+  tier2Qty?: number;
+  tier2_qty?: number;
+  tier2Discount?: number;
+  tier2_discount?: number;
+}
+
+export interface CartItem {
+  product: CartProduct;
+  quantityCases: number;
+}
+
+export function getTieredPrice(product: CartProduct, cases: number): { effectivePrice: number; discountPercent: number } {
+  if (!product || !product.casePrice) {
+    return { effectivePrice: 0, discountPercent: 0 };
+  }
+
+  const isEnabled = product.hasTieredDiscount !== false && product.has_tiered_discount !== false;
+  if (!isEnabled) {
+    return { effectivePrice: product.casePrice, discountPercent: 0 };
+  }
+
+  const t2Qty = Number(product.tier2Qty ?? product.tier2_qty ?? 10);
+  const t2Disc = Number(product.tier2Discount ?? product.tier2_discount ?? 10.0);
+  const t1Qty = Number(product.tier1Qty ?? product.tier1_qty ?? 5);
+  const t1Disc = Number(product.tier1Discount ?? product.tier1_discount ?? 5.0);
+
+  if (cases >= t2Qty && t2Disc > 0) {
+    const discounted = product.casePrice * (1 - t2Disc / 100);
+    return { effectivePrice: Math.round(discounted * 100) / 100, discountPercent: t2Disc };
+  } else if (cases >= t1Qty && t1Disc > 0) {
+    const discounted = product.casePrice * (1 - t1Disc / 100);
+    return { effectivePrice: Math.round(discounted * 100) / 100, discountPercent: t1Disc };
+  }
+
+  return { effectivePrice: product.casePrice, discountPercent: 0 };
+}
+
+interface CartContextType {
+  isCartOpen: boolean;
+  setIsCartOpen: (open: boolean) => void;
+  items: CartItem[];
+  addToCart: (product: CartProduct, cases?: number) => void;
+  updateQuantity: (productId: string, quantity: number) => void;
+  removeFromCart: (productId: string) => void;
+  clearCart: () => void;
+  cartTotal: number;
+  vatAmount: number;
+  grandTotal: number;
+  estimatedTotalProfit: number;
+  totalSavedFromTiers: number;
+}
+
+const CartContext = createContext<CartContextType | undefined>(undefined);
+
+export function CartProvider({ children }: { children: React.ReactNode }) {
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [items, setItems] = useState<CartItem[]>([]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("optom_cart");
+      if (saved) {
+        setItems(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error("Грешка при зареждане на количката:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("optom_cart", JSON.stringify(items));
+    } catch (e) {}
+  }, [items]);
+
+  const addToCart = (product: CartProduct, cases: number = 1) => {
+    setItems((prev) => {
+      const existing = prev.find((it) => it.product.id === product.id);
+      if (existing) {
+        return prev.map((it) =>
+          it.product.id === product.id
+            ? { ...it, quantityCases: it.quantityCases + cases }
+            : it
+        );
+      }
+      return [...prev, { product, quantityCases: cases }];
+    });
+    setIsCartOpen(true);
+  };
+
+  useEffect(() => {
+    const handleGlobalAddToCart = (event: Event) => {
+      const customEvent = event as CustomEvent<CartProduct>;
+      if (customEvent.detail) {
+        addToCart(customEvent.detail, 1);
+      }
+    };
+    window.addEventListener("optom:add-to-cart", handleGlobalAddToCart);
+    return () => window.removeEventListener("optom:add-to-cart", handleGlobalAddToCart);
+  }, []);
+
+  const updateQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+    setItems((prev) =>
+      prev.map((it) =>
+        it.product.id === productId ? { ...it, quantityCases: quantity } : it
+      )
+    );
+  };
+
+  const removeFromCart = (productId: string) => {
+    setItems((prev) => prev.filter((it) => it.product.id !== productId));
+  };
+
+  const clearCart = () => {
+    setItems([]);
+  };
+
+  const cartTotal = items.reduce((sum, it) => {
+    const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
+    return sum + it.quantityCases * effectivePrice;
+  }, 0);
+
+  const originalTotalNoDiscount = items.reduce((sum, it) => {
+    return sum + it.quantityCases * it.product.casePrice;
+  }, 0);
+
+  const totalSavedFromTiers = Math.max(0, originalTotalNoDiscount - cartTotal);
+  const vatAmount = +(cartTotal * 0.20).toFixed(2);
+  const grandTotal = +(cartTotal + vatAmount).toFixed(2);
+
+  const estimatedTotalProfit = items.reduce((sum, it) => {
+    const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
+    const revenuePerCase = it.product.rrpPrice * it.product.unitsPerCase;
+    const profitPerCase = Math.max(0, revenuePerCase - effectivePrice);
+    return sum + profitPerCase * it.quantityCases;
+  }, 0);
+
+  return (
+    <CartContext.Provider
+      value={{
+        isCartOpen,
+        setIsCartOpen,
+        items,
+        addToCart,
+        updateQuantity,
+        removeFromCart,
+        clearCart,
+        cartTotal,
+        vatAmount,
+        grandTotal,
+        estimatedTotalProfit,
+        totalSavedFromTiers,
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export function useCart() {
+  const context = useContext(CartContext);
+  if (!context) throw new Error("useCart must be used within a CartProvider");
+  return context;
 }
 </file>
 
@@ -6932,6 +6938,104 @@ async def import_products_excel(
         imported_count += 1
 
     db.commit()
+
+# --- ДОБАВЕНИ ЛИПСВАЩИ ЕНДПОИНТИ И ИМПОРТИ ---
+from fastapi import Response
+from datetime import date, timedelta
+
+@app.post("/api/products")
+def add_product(payload: dict, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    if not current_user or current_user.role != "supplier":
+        raise HTTPException(status_code=403, detail="Нямате права.")
+    
+    new_prod = models.Product(
+        id=str(uuid.uuid4())[:8],
+        name=payload.get("name"),
+        barcode=payload.get("barcode"),
+        casePrice=payload.get("casePrice", 0),
+        rrpPrice=payload.get("rrpPrice", 0),
+        unitsPerCase=payload.get("unitsPerCase", 1),
+        category=payload.get("category", "Други"),
+        supplierName=current_user.company_name,
+        supplier_id=current_user.id,
+        imageUrl=payload.get("imageUrl", ""),
+        supplierMinimum=payload.get("supplierMinimum", 50.0),
+        hasTieredDiscount=payload.get("hasTieredDiscount", True),
+        tier1Qty=payload.get("tier1Qty", 5),
+        tier1Discount=payload.get("tier1Discount", 5.0),
+        tier2Qty=payload.get("tier2Qty", 10),
+        tier2Discount=payload.get("tier2Discount", 10.0)
+    )
+    db.add(new_prod)
+    db.commit()
+    return {"status": "success"}
+
+@app.patch("/api/products/{product_id}")
+def update_product(product_id: str, payload: dict, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    prod = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if prod:
+        for key, value in payload.items():
+            if hasattr(prod, key):
+                setattr(prod, key, value)
+        db.commit()
+    return {"status": "success"}
+
+@app.delete("/api/products/{product_id}")
+def delete_product(product_id: str, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    prod = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if prod:
+        db.delete(prod)
+        db.commit()
+    return {"status": "success"}
+
+@app.patch("/api/orders/{order_id}/status")
+def update_order_status(order_id: str, payload: dict, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if order and "status" in payload:
+        order.status = payload["status"]
+        db.commit()
+    return {"status": "success"}
+
+@app.get("/api/orders/{order_id}/invoice")
+def get_order_invoice(order_id: str, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    items_data = []
+    for it in order.items:
+        prod = db.query(models.Product).filter(models.Product.id == it.product_id).first()
+        items_data.append({
+            "name": prod.name if prod else "Артикул",
+            "quantity": it.quantity_cases,
+            "unit_price": it.case_price,
+            "total_price": it.quantity_cases * it.case_price,
+            "ean": prod.barcode if prod else "",
+            "pack_details": f"Стек {prod.unitsPerCase} бр." if prod else ""
+        })
+    
+    order_dict = {
+        "id": order.id,
+        "storeName": order.storeName,
+        "invoiceEmail": order.invoiceEmail,
+        "address": order.address,
+        "eik": order.eik,
+        "paymentTerms": order.paymentTerms,
+        "subtotal": order.subtotal,
+        "vat": order.vat,
+        "total": order.total
+    }
+    
+    pdf_bytes = generate_order_invoice_pdf(order_dict, items_data)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Invoice_{order.id}.pdf"'}
+    )
+
+@app.get("/api/orders/{order_id}/delivery-note")
+def get_order_delivery_note(order_id: str, db: Session = Depends(get_db)):
+    return get_order_invoice(order_id, db)
 </file>
 
 <file path="frontend/src/app/page.tsx">
