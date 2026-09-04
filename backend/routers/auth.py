@@ -170,3 +170,9 @@ def get_me(current_user: models.User = Depends(get_current_user)):
         "mol": current_user.mol,
         "role": current_user.role
     }
+
+@router.get("/validate-eik/{eik}")
+def validate_eik(eik: str):
+    if len(eik) in (9, 13) and eik.isdigit():
+        return {"valid": True, "message": "ЕИК е валиден"}
+    return {"valid": False, "message": "Невалиден формат на ЕИК"}

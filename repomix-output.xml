@@ -857,176 +857,6 @@ export const BarcodeScannerModal: React.FC<Props> = ({ isOpen, onClose, onScan }
 };
 </file>
 
-<file path="frontend/src/components/CsvImportModal.tsx">
-"use client";
-
-import React, { useState } from "react";
-import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertCircle, X, Download } from "lucide-react";
-
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-export default function CsvImportModal({ isOpen, onClose, onSuccess }: Props) {
-  const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [resultMessage, setResultMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  if (!isOpen) return null;
-
-  const getApiBaseUrl = () => {
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
-    }
-    if (typeof window !== 'undefined') {
-      const currentHost = window.location.hostname;
-      if (currentHost.includes('-3000.app.github.dev')) {
-        return `https://${currentHost.replace('-3000.app.github.dev', '-8000.app.github.dev')}`;
-      }
-    }
-    return "https://fairlike.onrender.com";
-  };
-
-  const handleDownloadTemplate = () => {
-    const csvContent = "name,category,barcode,units_per_case,case_price,rrp_price,supplier_name,supplier_minimum,image_url\n" +
-      "Шоколад Milka Alpine Milk 100g,Шоколади,7622210286124,24,38.40,2.29,Монделийз България,50.0,https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80\n" +
-      "Чипс Chio Паприка 140g,Снаксове,5900547001234,18,43.20,3.19,Интерснак България,50.0,https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80\n" +
-      "Минерална вода Банкя 1.5L,Води,3800001234567,6,4.80,1.20,Кока-Кола ХБК България,60.0,https://images.unsplash.com/photo-1559839914-17aae19cec71?w=500&q=80";
-
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "OPTOM_BG_Shablon_Tsenova_Lista.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleUpload = async () => {
-    if (!file) return;
-    setLoading(true);
-    setResultMessage(null);
-    setErrorMessage(null);
-
-    const baseUrl = getApiBaseUrl();
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const res = await fetch(`${baseUrl}/api/products/import`, {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Грешка при импорта на файла");
-
-      setResultMessage(data.message);
-      onSuccess();
-    } catch (err: any) {
-      setErrorMessage(err.message || "Грешка при връзка със сървъра");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200 animate-in fade-in zoom-in duration-200 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-            <FileSpreadsheet className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">Масов импорт на ценова листа</h3>
-            <p className="text-xs text-slate-500">Качете .xlsx или .csv файл от вашата складова програма</p>
-          </div>
-        </div>
-
-        {errorMessage && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-700 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {resultMessage && (
-          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-700 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-            <span>{resultMessage}</span>
-          </div>
-        )}
-
-        <div className="border-2 border-dashed border-slate-200 hover:border-blue-500 rounded-2xl p-6 text-center transition-colors bg-slate-50 mb-4">
-          <UploadCloud className="w-10 h-10 text-slate-400 mx-auto mb-2" />
-          <p className="text-sm font-semibold text-slate-800">
-            {file ? file.name : "Изберете или пуснете файл тук"}
-          </p>
-          <p className="text-xs text-slate-400 mt-1">Поддържа .xlsx, .xls и .csv</p>
-          
-          <input
-            type="file"
-            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-            onChange={(e) => {
-              setFile(e.target.files?.[0] || null);
-              setErrorMessage(null);
-              setResultMessage(null);
-            }}
-            className="hidden"
-            id="excelFileInput"
-          />
-          <label
-            htmlFor="excelFileInput"
-            className="mt-3 inline-block px-4 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer shadow-sm"
-          >
-            Избери файл от устройството
-          </label>
-        </div>
-
-        <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl mb-5 border border-slate-200/80">
-          <span className="text-xs text-slate-600 font-medium">Нямате готова таблица?</span>
-          <button
-            type="button"
-            onClick={handleDownloadTemplate}
-            className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5" /> Свали примерен CSV шаблон
-          </button>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
-          >
-            Затвори
-          </button>
-          <button
-            type="button"
-            disabled={!file || loading}
-            onClick={handleUpload}
-            className="w-1/2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md disabled:opacity-50 cursor-pointer"
-          >
-            {loading ? "Импортиране..." : "Качи в каталога"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-</file>
-
 <file path="frontend/src/components/ProductCard.tsx">
 'use client';
 
@@ -1655,6 +1485,43 @@ class OrderItem(Base):
     order = relationship("Order", back_populates="items")
 </file>
 
+<file path="frontend/src/app/layout.tsx">
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { AuthProvider } from "@/context/AuthContext";
+import { CartProvider } from "@/context/CartContext";
+import AuthModal from "@/components/AuthModal";
+import CartReminderToast from "@/components/CartReminderToast";
+
+const inter = Inter({ subsets: ["latin", "cyrillic"] });
+
+export const metadata: Metadata = {
+  title: "OPTOM.BG - B2B Платформа за презареждане на търговски обекти",
+  description: "Директни доставки на едро от производители и официални вносители към магазини.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="bg">
+      <body className={inter.className}>
+        <AuthProvider>
+          <CartProvider>
+            {children}
+            <AuthModal />
+            <CartReminderToast />
+          </CartProvider>
+        </AuthProvider>
+      </body>
+    </html>
+  );
+}
+</file>
+
 <file path="frontend/src/components/CartReminderToast.tsx">
 "use client";
 
@@ -1793,6 +1660,180 @@ export default function CartReminderToast() {
         >
           Виж количката
         </button>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="frontend/src/components/CsvImportModal.tsx">
+"use client";
+
+import React, { useState } from "react";
+import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertCircle, X, Download } from "lucide-react";
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+export default function CsvImportModal({ isOpen, onClose, onSuccess }: Props) {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [resultMessage, setResultMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const getApiBaseUrl = () => {
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+    }
+    if (typeof window !== 'undefined') {
+      const currentHost = window.location.hostname;
+      if (currentHost.includes('-3000.app.github.dev')) {
+        return `https://${currentHost.replace('-3000.app.github.dev', '-8000.app.github.dev')}`;
+      }
+    }
+    return "https://fairlike.onrender.com";
+  };
+
+  const handleDownloadTemplate = () => {
+    const csvContent = "name,category,barcode,units_per_case,case_price,rrp_price,supplier_name,supplier_minimum,image_url\n" +
+      "Шоколад Milka Alpine Milk 100g,Шоколади,7622210286124,24,38.40,2.29,Монделийз България,50.0,https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80\n" +
+      "Чипс Chio Паприка 140g,Снаксове,5900547001234,18,43.20,3.19,Интерснак България,50.0,https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=500&q=80\n" +
+      "Минерална вода Банкя 1.5L,Води,3800001234567,6,4.80,1.20,Кока-Кола ХБК България,60.0,https://images.unsplash.com/photo-1559839914-17aae19cec71?w=500&q=80";
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "OPTOM_BG_Shablon_Tsenova_Lista.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    setResultMessage(null);
+    setErrorMessage(null);
+
+    const baseUrl = getApiBaseUrl();
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const token = localStorage.getItem("optom_b2b_token");
+      const res = await fetch(`${baseUrl}/api/products/import`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Грешка при импорта на файла");
+
+      setResultMessage(data.message);
+      onSuccess();
+    } catch (err: any) {
+      setErrorMessage(err.message || "Грешка при връзка със сървъра");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200 animate-in fade-in zoom-in duration-200 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+            <FileSpreadsheet className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Масов импорт на ценова листа</h3>
+            <p className="text-xs text-slate-500">Качете .xlsx или .csv файл от вашата складова програма</p>
+          </div>
+        </div>
+
+        {errorMessage && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-700 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {resultMessage && (
+          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-700 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <span>{resultMessage}</span>
+          </div>
+        )}
+
+        <div className="border-2 border-dashed border-slate-200 hover:border-blue-500 rounded-2xl p-6 text-center transition-colors bg-slate-50 mb-4">
+          <UploadCloud className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+          <p className="text-sm font-semibold text-slate-800">
+            {file ? file.name : "Изберете или пуснете файл тук"}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">Поддържа .xlsx, .xls и .csv</p>
+          
+          <input
+            type="file"
+            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+            onChange={(e) => {
+              setFile(e.target.files?.[0] || null);
+              setErrorMessage(null);
+              setResultMessage(null);
+            }}
+            className="hidden"
+            id="excelFileInput"
+          />
+          <label
+            htmlFor="excelFileInput"
+            className="mt-3 inline-block px-4 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer shadow-sm"
+          >
+            Избери файл от устройството
+          </label>
+        </div>
+
+        <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl mb-5 border border-slate-200/80">
+          <span className="text-xs text-slate-600 font-medium">Нямате готова таблица?</span>
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" /> Свали примерен CSV шаблон
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+          >
+            Затвори
+          </button>
+          <button
+            type="button"
+            disabled={!file || loading}
+            onClick={handleUpload}
+            className="w-1/2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-md disabled:opacity-50 cursor-pointer"
+          >
+            {loading ? "Импортиране..." : "Качи в каталога"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2591,43 +2632,6 @@ export default function ProductDetailPage() {
 
       <CartDrawer />
     </div>
-  );
-}
-</file>
-
-<file path="frontend/src/app/layout.tsx">
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext";
-import { CartProvider } from "@/context/CartContext";
-import AuthModal from "@/components/AuthModal";
-import CartReminderToast from "@/components/CartReminderToast";
-
-const inter = Inter({ subsets: ["latin", "cyrillic"] });
-
-export const metadata: Metadata = {
-  title: "OPTOM.BG - B2B Платформа за презареждане на търговски обекти",
-  description: "Директни доставки на едро от производители и официални вносители към магазини.",
-};
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="bg">
-      <body className={inter.className}>
-        <AuthProvider>
-          <CartProvider>
-            {children}
-            <AuthModal />
-            <CartReminderToast />
-          </CartProvider>
-        </AuthProvider>
-      </body>
-    </html>
   );
 }
 </file>
@@ -3452,6 +3456,198 @@ export default function LiveSearch() {
 }
 </file>
 
+<file path="frontend/src/context/CartContext.tsx">
+"use client";
+
+import React, { createContext, useContext, useState, useEffect } from "react";
+
+export interface CartProduct {
+  id: string;
+  name: string;
+  category: string;
+  barcode: string;
+  supplierName: string;
+  supplierMinimum: number;
+  unitsPerCase: number;
+  casePrice: number;
+  rrpPrice: number;
+  imageUrl: string;
+  hasTieredDiscount?: boolean;
+  has_tiered_discount?: boolean;
+  tier1Qty?: number;
+  tier1_qty?: number;
+  tier1Discount?: number;
+  tier1_discount?: number;
+  tier2Qty?: number;
+  tier2_qty?: number;
+  tier2Discount?: number;
+  tier2_discount?: number;
+}
+
+export interface CartItem {
+  product: CartProduct;
+  quantityCases: number;
+}
+
+export function getTieredPrice(product: CartProduct, cases: number): { effectivePrice: number; discountPercent: number } {
+  if (!product || !product.casePrice) {
+    return { effectivePrice: 0, discountPercent: 0 };
+  }
+
+  const isEnabled = product.hasTieredDiscount !== false && product.has_tiered_discount !== false;
+  if (!isEnabled) {
+    return { effectivePrice: product.casePrice, discountPercent: 0 };
+  }
+
+  const t2Qty = Number(product.tier2Qty ?? product.tier2_qty ?? 10);
+  const t2Disc = Number(product.tier2Discount ?? product.tier2_discount ?? 10.0);
+  const t1Qty = Number(product.tier1Qty ?? product.tier1_qty ?? 5);
+  const t1Disc = Number(product.tier1Discount ?? product.tier1_discount ?? 5.0);
+
+  if (cases >= t2Qty && t2Disc > 0) {
+    const discounted = product.casePrice * (1 - t2Disc / 100);
+    return { effectivePrice: Math.round(discounted * 100) / 100, discountPercent: t2Disc };
+  } else if (cases >= t1Qty && t1Disc > 0) {
+    const discounted = product.casePrice * (1 - t1Disc / 100);
+    return { effectivePrice: Math.round(discounted * 100) / 100, discountPercent: t1Disc };
+  }
+
+  return { effectivePrice: product.casePrice, discountPercent: 0 };
+}
+
+interface CartContextType {
+  isCartOpen: boolean;
+  setIsCartOpen: (open: boolean) => void;
+  items: CartItem[];
+  addToCart: (product: CartProduct, cases?: number) => void;
+  updateQuantity: (productId: string, quantity: number) => void;
+  removeFromCart: (productId: string) => void;
+  clearCart: () => void;
+  cartTotal: number;
+  vatAmount: number;
+  grandTotal: number;
+  estimatedTotalProfit: number;
+  totalSavedFromTiers: number;
+}
+
+const CartContext = createContext<CartContextType | undefined>(undefined);
+
+export function CartProvider({ children }: { children: React.ReactNode }) {
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [items, setItems] = useState<CartItem[]>([]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("optom_cart");
+      if (saved) {
+        setItems(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error("Грешка при зареждане на количката:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("optom_cart", JSON.stringify(items));
+    } catch (e) {}
+  }, [items]);
+
+  const addToCart = (product: CartProduct, cases: number = 1) => {
+    setItems((prev) => {
+      const existing = prev.find((it) => it.product.id === product.id);
+      if (existing) {
+        return prev.map((it) =>
+          it.product.id === product.id
+            ? { ...it, quantityCases: it.quantityCases + cases }
+            : it
+        );
+      }
+      return [...prev, { product, quantityCases: cases }];
+    });
+    setIsCartOpen(true);
+  };
+
+  useEffect(() => {
+    const handleGlobalAddToCart = (event: Event) => {
+      const customEvent = event as CustomEvent<CartProduct>;
+      if (customEvent.detail) {
+        addToCart(customEvent.detail, 1);
+      }
+    };
+    window.addEventListener("optom:add-to-cart", handleGlobalAddToCart);
+    return () => window.removeEventListener("optom:add-to-cart", handleGlobalAddToCart);
+  }, []);
+
+  const updateQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+    setItems((prev) =>
+      prev.map((it) =>
+        it.product.id === productId ? { ...it, quantityCases: quantity } : it
+      )
+    );
+  };
+
+  const removeFromCart = (productId: string) => {
+    setItems((prev) => prev.filter((it) => it.product.id !== productId));
+  };
+
+  const clearCart = () => {
+    setItems([]);
+  };
+
+  const cartTotal = items.reduce((sum, it) => {
+    const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
+    return sum + it.quantityCases * effectivePrice;
+  }, 0);
+
+  const originalTotalNoDiscount = items.reduce((sum, it) => {
+    return sum + it.quantityCases * it.product.casePrice;
+  }, 0);
+
+  const totalSavedFromTiers = Math.max(0, originalTotalNoDiscount - cartTotal);
+  const vatAmount = +(cartTotal * 0.20).toFixed(2);
+  const grandTotal = +(cartTotal + vatAmount).toFixed(2);
+
+  const estimatedTotalProfit = items.reduce((sum, it) => {
+    const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
+    const revenuePerCase = it.product.rrpPrice * it.product.unitsPerCase;
+    const profitPerCase = Math.max(0, revenuePerCase - effectivePrice);
+    return sum + profitPerCase * it.quantityCases;
+  }, 0);
+
+  return (
+    <CartContext.Provider
+      value={{
+        isCartOpen,
+        setIsCartOpen,
+        items,
+        addToCart,
+        updateQuantity,
+        removeFromCart,
+        clearCart,
+        cartTotal,
+        vatAmount,
+        grandTotal,
+        estimatedTotalProfit,
+        totalSavedFromTiers,
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export function useCart() {
+  const context = useContext(CartContext);
+  if (!context) throw new Error("useCart must be used within a CartProvider");
+  return context;
+}
+</file>
+
 <file path="frontend/src/app/orders/page.tsx">
 "use client";
 
@@ -3985,195 +4181,94 @@ export function useAuth() {
 }
 </file>
 
-<file path="frontend/src/context/CartContext.tsx">
+<file path="frontend/src/components/HeaderAuthButton.tsx">
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React from "react";
+import Link from "next/link";
+import { LogOut, Building2, Store, FileText, PackagePlus } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
-export interface CartProduct {
-  id: string;
-  name: string;
-  category: string;
-  barcode: string;
-  supplierName: string;
-  supplierMinimum: number;
-  unitsPerCase: number;
-  casePrice: number;
-  rrpPrice: number;
-  imageUrl: string;
-  hasTieredDiscount?: boolean;
-  has_tiered_discount?: boolean;
-  tier1Qty?: number;
-  tier1_qty?: number;
-  tier1Discount?: number;
-  tier1_discount?: number;
-  tier2Qty?: number;
-  tier2_qty?: number;
-  tier2Discount?: number;
-  tier2_discount?: number;
-}
+export default function HeaderAuthButton() {
+  const { user, logout, openAuthMode } = useAuth();
 
-export interface CartItem {
-  product: CartProduct;
-  quantityCases: number;
-}
+  if (!user) {
+    return (
+      <div className="flex items-center gap-4 sm:gap-6 text-xs">
+        {/* 1. Sign up to sell -> Отваря Регистрация за Фабрика/Вносител */}
+        <button
+          onClick={() => openAuthMode("register", "supplier")}
+          className="text-[#525252] hover:text-[#121212] font-medium transition-colors cursor-pointer hidden md:inline-block"
+        >
+          Sign up to sell
+        </button>
 
-export function getTieredPrice(product: CartProduct, cases: number): { effectivePrice: number; discountPercent: number } {
-  if (!product || !product.casePrice) {
-    return { effectivePrice: 0, discountPercent: 0 };
-  }
+        {/* 2. Sign in -> Отваря Вход */}
+        <button
+          onClick={() => openAuthMode("login")}
+          className="text-[#121212] font-medium hover:underline transition-all cursor-pointer"
+        >
+          Sign in
+        </button>
 
-  const isEnabled = product.hasTieredDiscount !== false && product.has_tiered_discount !== false;
-  if (!isEnabled) {
-    return { effectivePrice: product.casePrice, discountPercent: 0 };
-  }
-
-  const t2Qty = Number(product.tier2Qty ?? product.tier2_qty ?? 10);
-  const t2Disc = Number(product.tier2Discount ?? product.tier2_discount ?? 10.0);
-  const t1Qty = Number(product.tier1Qty ?? product.tier1_qty ?? 5);
-  const t1Disc = Number(product.tier1Discount ?? product.tier1_discount ?? 5.0);
-
-  if (cases >= t2Qty && t2Disc > 0) {
-    const discounted = product.casePrice * (1 - t2Disc / 100);
-    return { effectivePrice: Math.round(discounted * 100) / 100, discountPercent: t2Disc };
-  } else if (cases >= t1Qty && t1Disc > 0) {
-    const discounted = product.casePrice * (1 - t1Disc / 100);
-    return { effectivePrice: Math.round(discounted * 100) / 100, discountPercent: t1Disc };
-  }
-
-  return { effectivePrice: product.casePrice, discountPercent: 0 };
-}
-
-interface CartContextType {
-  isCartOpen: boolean;
-  setIsCartOpen: (open: boolean) => void;
-  items: CartItem[];
-  addToCart: (product: CartProduct, cases?: number) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
-  removeFromCart: (productId: string) => void;
-  clearCart: () => void;
-  cartTotal: number;
-  vatAmount: number;
-  grandTotal: number;
-  estimatedTotalProfit: number;
-  totalSavedFromTiers: number;
-}
-
-const CartContext = createContext<CartContextType | undefined>(undefined);
-
-export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [items, setItems] = useState<CartItem[]>([]);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("optom_cart");
-      if (saved) {
-        setItems(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.error("Грешка при зареждане на количката:", e);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("optom_cart", JSON.stringify(items));
-    } catch (e) {}
-  }, [items]);
-
-  const addToCart = (product: CartProduct, cases: number = 1) => {
-    setItems((prev) => {
-      const existing = prev.find((it) => it.product.id === product.id);
-      if (existing) {
-        return prev.map((it) =>
-          it.product.id === product.id
-            ? { ...it, quantityCases: it.quantityCases + cases }
-            : it
-        );
-      }
-      return [...prev, { product, quantityCases: cases }];
-    });
-    setIsCartOpen(true);
-  };
-
-  useEffect(() => {
-    const handleGlobalAddToCart = (event: Event) => {
-      const customEvent = event as CustomEvent<CartProduct>;
-      if (customEvent.detail) {
-        addToCart(customEvent.detail, 1);
-      }
-    };
-    window.addEventListener("optom:add-to-cart", handleGlobalAddToCart);
-    return () => window.removeEventListener("optom:add-to-cart", handleGlobalAddToCart);
-  }, []);
-
-  const updateQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    setItems((prev) =>
-      prev.map((it) =>
-        it.product.id === productId ? { ...it, quantityCases: quantity } : it
-      )
+        {/* 3. Sign up to buy -> Отваря Регистрация за Магазини/Купувачи */}
+        <button
+          onClick={() => openAuthMode("register", "retailer")}
+          className="px-4 py-2 bg-[#262626] hover:bg-[#121212] text-white rounded-md font-semibold text-xs transition-all shadow-xs cursor-pointer"
+        >
+          Sign up to buy
+        </button>
+      </div>
     );
-  };
+  }
 
-  const removeFromCart = (productId: string) => {
-    setItems((prev) => prev.filter((it) => it.product.id !== productId));
-  };
-
-  const clearCart = () => {
-    setItems([]);
-  };
-
-  const cartTotal = items.reduce((sum, it) => {
-    const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
-    return sum + it.quantityCases * effectivePrice;
-  }, 0);
-
-  const originalTotalNoDiscount = items.reduce((sum, it) => {
-    return sum + it.quantityCases * it.product.casePrice;
-  }, 0);
-
-  const totalSavedFromTiers = Math.max(0, originalTotalNoDiscount - cartTotal);
-  const vatAmount = +(cartTotal * 0.20).toFixed(2);
-  const grandTotal = +(cartTotal + vatAmount).toFixed(2);
-
-  const estimatedTotalProfit = items.reduce((sum, it) => {
-    const { effectivePrice } = getTieredPrice(it.product, it.quantityCases);
-    const revenuePerCase = it.product.rrpPrice * it.product.unitsPerCase;
-    const profitPerCase = Math.max(0, revenuePerCase - effectivePrice);
-    return sum + profitPerCase * it.quantityCases;
-  }, 0);
+  const isSupplier = user.role === "supplier";
 
   return (
-    <CartContext.Provider
-      value={{
-        isCartOpen,
-        setIsCartOpen,
-        items,
-        addToCart,
-        updateQuantity,
-        removeFromCart,
-        clearCart,
-        cartTotal,
-        vatAmount,
-        grandTotal,
-        estimatedTotalProfit,
-        totalSavedFromTiers,
-      }}
-    >
-      {children}
-    </CartContext.Provider>
-  );
-}
+    <div className="flex items-center gap-2.5 text-xs">
+      {isSupplier ? (
+        <Link
+          href="/supplier"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] text-[#121212] rounded-md font-semibold transition-all shadow-2xs"
+        >
+          <PackagePlus className="w-3.5 h-3.5 text-[#121212]" />
+          <span className="hidden sm:inline">Доставчик Панел</span>
+        </Link>
+      ) : (
+        <Link
+          href="/orders"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] text-[#121212] rounded-md font-semibold transition-all shadow-2xs"
+        >
+          <FileText className="w-3.5 h-3.5 text-[#121212]" />
+          <span className="hidden sm:inline">Фактури & Заявки</span>
+        </Link>
+      )}
 
-export function useCart() {
-  const context = useContext(CartContext);
-  if (!context) throw new Error("useCart must be used within a CartProvider");
-  return context;
+      <div className="flex items-center gap-2 px-2.5 py-1 bg-white border border-[#EBE8E3] rounded-md">
+        {isSupplier ? (
+          <Building2 className="w-3.5 h-3.5 text-[#121212] shrink-0" />
+        ) : (
+          <Store className="w-3.5 h-3.5 text-[#121212] shrink-0" />
+        )}
+        <div className="text-left hidden md:block max-w-[130px]">
+          <p className="text-[11px] font-bold text-[#121212] truncate leading-tight">
+            {user.company_name || user.companyName || user.email.split("@")[0]}
+          </p>
+          <p className="text-[9px] text-[#737373] font-medium uppercase tracking-wider">
+            {isSupplier ? "Фабрика" : "Обект"}
+          </p>
+        </div>
+      </div>
+
+      <button
+        onClick={logout}
+        title="Изход от профила"
+        className="p-1.5 text-neutral-400 hover:text-[#121212] hover:bg-[#FAF9F7] rounded-md border border-transparent hover:border-[#EBE8E3] transition-all cursor-pointer"
+      >
+        <LogOut className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
 }
 </file>
 
@@ -5272,97 +5367,6 @@ export default function SupplierDashboardPage() {
           </div>
         )}
       </main>
-    </div>
-  );
-}
-</file>
-
-<file path="frontend/src/components/HeaderAuthButton.tsx">
-"use client";
-
-import React from "react";
-import Link from "next/link";
-import { LogOut, Building2, Store, FileText, PackagePlus } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-
-export default function HeaderAuthButton() {
-  const { user, logout, openAuthMode } = useAuth();
-
-  if (!user) {
-    return (
-      <div className="flex items-center gap-4 sm:gap-6 text-xs">
-        {/* 1. Sign up to sell -> Отваря Регистрация за Фабрика/Вносител */}
-        <button
-          onClick={() => openAuthMode("register", "supplier")}
-          className="text-[#525252] hover:text-[#121212] font-medium transition-colors cursor-pointer hidden md:inline-block"
-        >
-          Sign up to sell
-        </button>
-
-        {/* 2. Sign in -> Отваря Вход */}
-        <button
-          onClick={() => openAuthMode("login")}
-          className="text-[#121212] font-medium hover:underline transition-all cursor-pointer"
-        >
-          Sign in
-        </button>
-
-        {/* 3. Sign up to buy -> Отваря Регистрация за Магазини/Купувачи */}
-        <button
-          onClick={() => openAuthMode("register", "retailer")}
-          className="px-4 py-2 bg-[#262626] hover:bg-[#121212] text-white rounded-md font-semibold text-xs transition-all shadow-xs cursor-pointer"
-        >
-          Sign up to buy
-        </button>
-      </div>
-    );
-  }
-
-  const isSupplier = user.role === "supplier";
-
-  return (
-    <div className="flex items-center gap-2.5 text-xs">
-      {isSupplier ? (
-        <Link
-          href="/supplier"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] text-[#121212] rounded-md font-semibold transition-all shadow-2xs"
-        >
-          <PackagePlus className="w-3.5 h-3.5 text-[#121212]" />
-          <span className="hidden sm:inline">Доставчик Панел</span>
-        </Link>
-      ) : (
-        <Link
-          href="/orders"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF9F7] hover:bg-[#F2F0EB] border border-[#EBE8E3] text-[#121212] rounded-md font-semibold transition-all shadow-2xs"
-        >
-          <FileText className="w-3.5 h-3.5 text-[#121212]" />
-          <span className="hidden sm:inline">Фактури & Заявки</span>
-        </Link>
-      )}
-
-      <div className="flex items-center gap-2 px-2.5 py-1 bg-white border border-[#EBE8E3] rounded-md">
-        {isSupplier ? (
-          <Building2 className="w-3.5 h-3.5 text-[#121212] shrink-0" />
-        ) : (
-          <Store className="w-3.5 h-3.5 text-[#121212] shrink-0" />
-        )}
-        <div className="text-left hidden md:block max-w-[130px]">
-          <p className="text-[11px] font-bold text-[#121212] truncate leading-tight">
-            {user.company_name || user.companyName || user.email.split("@")[0]}
-          </p>
-          <p className="text-[9px] text-[#737373] font-medium uppercase tracking-wider">
-            {isSupplier ? "Фабрика" : "Обект"}
-          </p>
-        </div>
-      </div>
-
-      <button
-        onClick={logout}
-        title="Изход от профила"
-        className="p-1.5 text-neutral-400 hover:text-[#121212] hover:bg-[#FAF9F7] rounded-md border border-transparent hover:border-[#EBE8E3] transition-all cursor-pointer"
-      >
-        <LogOut className="w-3.5 h-3.5" />
-      </button>
     </div>
   );
 }
@@ -6862,6 +6866,72 @@ def trigger_direct_email(order_dict: dict, items_data: list):
         resend.Emails.send(email_params)
     except Exception as e:
         print(f"Resend error: {e}")
+
+
+@app.post("/api/products/import")
+async def import_products_excel(
+    file: UploadFile = File(...),
+    current_user: Optional[models.User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user or current_user.role != "supplier":
+        raise HTTPException(status_code=403, detail="Само регистрирани доставчици могат да качват ценоразписи.")
+    
+    contents = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Грешка при четене на файла: {str(e)}")
+
+    imported_count = 0
+    for _, row in df.iterrows():
+        name = str(row.get("name") or row.get("Име на артикул") or "").strip()
+        if not name:
+            continue
+        
+        barcode = str(row.get("barcode") or row.get("Баркод") or f"3800{imported_count}").strip()
+        case_price = float(row.get("case_price") or row.get("Цена на стек (лв)") or 20.0)
+        rrp_price = float(row.get("rrp_price") or row.get("Препоръчителна цена за 1бр (лв)") or 2.5)
+        units_per_case = int(row.get("units_per_case") or row.get("Брой в стек") or 24)
+        category = str(row.get("category") or row.get("Категория") or "Безалкохолни & Води").strip()
+        image_url = str(row.get("imageUrl") or row.get("image_url") or row.get("Линк към снимка") or "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=500&q=80").strip()
+
+        existing = db.query(models.Product).filter(models.Product.barcode == barcode).first()
+        if existing:
+            existing.name = name
+            existing.casePrice = case_price
+            existing.rrpPrice = rrp_price
+            existing.unitsPerCase = units_per_case
+            existing.category = category
+            existing.supplierName = current_user.company_name
+            existing.supplier_id = current_user.id
+            existing.imageUrl = image_url
+        else:
+            new_prod = models.Product(
+                id=str(uuid.uuid4())[:8],
+                name=name,
+                barcode=barcode,
+                casePrice=case_price,
+                rrpPrice=rrp_price,
+                unitsPerCase=units_per_case,
+                category=category,
+                supplierName=current_user.company_name,
+                supplier_id=current_user.id,
+                imageUrl=image_url,
+                supplierMinimum=50.0,
+                hasTieredDiscount=True,
+                tier1Qty=5,
+                tier1Discount=5.0,
+                tier2Qty=10,
+                tier2Discount=10.0
+            )
+            db.add(new_prod)
+        imported_count += 1
+
+    db.commit()
 </file>
 
 <file path="frontend/src/app/page.tsx">

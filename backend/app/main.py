@@ -369,3 +369,101 @@ async def import_products_excel(
         imported_count += 1
 
     db.commit()
+
+# --- ДОБАВЕНИ ЛИПСВАЩИ ЕНДПОИНТИ И ИМПОРТИ ---
+from fastapi import Response
+from datetime import date, timedelta
+
+@app.post("/api/products")
+def add_product(payload: dict, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    if not current_user or current_user.role != "supplier":
+        raise HTTPException(status_code=403, detail="Нямате права.")
+    
+    new_prod = models.Product(
+        id=str(uuid.uuid4())[:8],
+        name=payload.get("name"),
+        barcode=payload.get("barcode"),
+        casePrice=payload.get("casePrice", 0),
+        rrpPrice=payload.get("rrpPrice", 0),
+        unitsPerCase=payload.get("unitsPerCase", 1),
+        category=payload.get("category", "Други"),
+        supplierName=current_user.company_name,
+        supplier_id=current_user.id,
+        imageUrl=payload.get("imageUrl", ""),
+        supplierMinimum=payload.get("supplierMinimum", 50.0),
+        hasTieredDiscount=payload.get("hasTieredDiscount", True),
+        tier1Qty=payload.get("tier1Qty", 5),
+        tier1Discount=payload.get("tier1Discount", 5.0),
+        tier2Qty=payload.get("tier2Qty", 10),
+        tier2Discount=payload.get("tier2Discount", 10.0)
+    )
+    db.add(new_prod)
+    db.commit()
+    return {"status": "success"}
+
+@app.patch("/api/products/{product_id}")
+def update_product(product_id: str, payload: dict, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    prod = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if prod:
+        for key, value in payload.items():
+            if hasattr(prod, key):
+                setattr(prod, key, value)
+        db.commit()
+    return {"status": "success"}
+
+@app.delete("/api/products/{product_id}")
+def delete_product(product_id: str, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    prod = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if prod:
+        db.delete(prod)
+        db.commit()
+    return {"status": "success"}
+
+@app.patch("/api/orders/{order_id}/status")
+def update_order_status(order_id: str, payload: dict, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if order and "status" in payload:
+        order.status = payload["status"]
+        db.commit()
+    return {"status": "success"}
+
+@app.get("/api/orders/{order_id}/invoice")
+def get_order_invoice(order_id: str, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    items_data = []
+    for it in order.items:
+        prod = db.query(models.Product).filter(models.Product.id == it.product_id).first()
+        items_data.append({
+            "name": prod.name if prod else "Артикул",
+            "quantity": it.quantity_cases,
+            "unit_price": it.case_price,
+            "total_price": it.quantity_cases * it.case_price,
+            "ean": prod.barcode if prod else "",
+            "pack_details": f"Стек {prod.unitsPerCase} бр." if prod else ""
+        })
+    
+    order_dict = {
+        "id": order.id,
+        "storeName": order.storeName,
+        "invoiceEmail": order.invoiceEmail,
+        "address": order.address,
+        "eik": order.eik,
+        "paymentTerms": order.paymentTerms,
+        "subtotal": order.subtotal,
+        "vat": order.vat,
+        "total": order.total
+    }
+    
+    pdf_bytes = generate_order_invoice_pdf(order_dict, items_data)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Invoice_{order.id}.pdf"'}
+    )
+
+@app.get("/api/orders/{order_id}/delivery-note")
+def get_order_delivery_note(order_id: str, db: Session = Depends(get_db)):
+    return get_order_invoice(order_id, db)
