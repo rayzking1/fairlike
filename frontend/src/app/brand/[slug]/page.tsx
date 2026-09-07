@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Header from '@/components/Header';
+import Navbar from '@/components/Navbar';
 import { useCart } from '@/context/CartContext';
 import { 
   Building2, MapPin, Clock, ShieldCheck, 
@@ -88,7 +88,7 @@ export default function BrandShowcasePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
-      <Header />
+      <Navbar />
 
       <div className="relative h-64 sm:h-80 w-full bg-slate-900 overflow-hidden">
         <img 
