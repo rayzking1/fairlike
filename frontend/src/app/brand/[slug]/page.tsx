@@ -2,46 +2,19 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import { useCart } from '@/context/CartContext';
 import { 
   Building2, MapPin, Clock, ShieldCheck, 
   Package, ShoppingCart, Check, Award
 } from 'lucide-react';
 
-interface CartProduct {
-  id: string;
-  name: string;
-  brand: string;
-  supplierName: string;
-  category: string;
-  pricePerUnit: number;
-  caseQuantity: number;
-  minOrderQuantity: number;
-  stock: number;
-  barcode: string;
-  imageUrl: string;
-  description: string;
-}
-
-interface BrandProfile {
-  name: string;
-  bio: string;
-  story: string;
-  city: string;
-  cover_image_url: string;
-  lead_time_days: string;
-  brand_values: string[];
-  products_count: number;
-}
-
 export default function BrandShowcasePage() {
   const params = useParams();
   const slug = params?.slug ? decodeURIComponent(params.slug as string) : '';
   const { addToCart } = useCart();
 
-  const [products, setProducts] = useState<CartProduct[]>([]);
-  const [profile, setProfile] = useState<BrandProfile | null>(null);
+  const [products, setProducts] = useState<any[]>([]);
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [addedIds, setAddedIds] = useState<{ [key: string]: boolean }>({});
 
@@ -61,8 +34,8 @@ export default function BrandShowcasePage() {
 
         const prodRes = await fetch(`${apiBase}/api/products/`);
         if (prodRes.ok) {
-          const allProds: CartProduct[] = await prodRes.json();
-          const filtered = allProds.filter((p: CartProduct) => 
+          const allProds: any[] = await prodRes.json();
+          const filtered = allProds.filter((p: any) => 
             p.brand?.toLowerCase() === slug.toLowerCase() || 
             p.supplierName?.toLowerCase() === slug.toLowerCase()
           );
@@ -78,8 +51,9 @@ export default function BrandShowcasePage() {
     loadData();
   }, [slug]);
 
-  const handleAdd = (product: CartProduct) => {
-    addToCart(product, product.minOrderQuantity || 1);
+  const handleAdd = (product: any) => {
+    const qty = Number(product.minOrderQuantity || 1);
+    (addToCart as any)(product, qty);
     setAddedIds((prev) => ({ ...prev, [product.id]: true }));
     setTimeout(() => {
       setAddedIds((prev) => ({ ...prev, [product.id]: false }));
@@ -88,8 +62,6 @@ export default function BrandShowcasePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
-      <Navbar />
-
       <div className="relative h-64 sm:h-80 w-full bg-slate-900 overflow-hidden">
         <img 
           src={profile?.cover_image_url || "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1600&q=80"} 
@@ -132,7 +104,7 @@ export default function BrandShowcasePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {(profile?.brand_values || ["Произведено в България", "Директно от фабрика", "ЗДДС фактуриране"]).map((v, idx) => (
+            {(profile?.brand_values || ["Произведено в България", "Директно от фабрика", "ЗДДС фактуриране"]).map((v: string, idx: number) => (
               <span key={idx} className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs font-semibold border border-slate-200">
                 {v}
               </span>
@@ -164,10 +136,12 @@ export default function BrandShowcasePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {products.map((p) => {
-              const casePrice = (p.pricePerUnit * (p.caseQuantity || 1)).toFixed(2);
-              const minBoxes = p.minOrderQuantity || 1;
-              const minOrderTotal = (p.pricePerUnit * (p.caseQuantity || 1) * minBoxes).toFixed(2);
+            {products.map((p: any) => {
+              const unitPrice = Number(p.pricePerUnit || p.price || 0);
+              const unitsInCase = Number(p.caseQuantity || p.unitsPerCase || 1);
+              const casePrice = (unitPrice * unitsInCase).toFixed(2);
+              const minBoxes = Number(p.minOrderQuantity || 1);
+              const minOrderTotal = (unitPrice * unitsInCase * minBoxes).toFixed(2);
               const isAdded = !!addedIds[p.id];
 
               return (
@@ -190,10 +164,10 @@ export default function BrandShowcasePage() {
                     <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1 mb-4">
                       <div className="flex justify-between items-baseline">
                         <span className="text-xs text-slate-500">Цена / брой:</span>
-                        <span className="text-base font-black text-blue-600">{Number(p.pricePerUnit).toFixed(2)} лв.</span>
+                        <span className="text-base font-black text-blue-600">{unitPrice.toFixed(2)} лв.</span>
                       </div>
                       <div className="flex justify-between text-[11px] text-slate-600">
-                        <span>Кашон ({p.caseQuantity || 1} бр.):</span>
+                        <span>Кашон ({unitsInCase} бр.):</span>
                         <span className="font-semibold">{casePrice} лв.</span>
                       </div>
                       <div className="flex justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
