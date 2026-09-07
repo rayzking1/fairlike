@@ -30,6 +30,7 @@ export default function BrandStorefrontPage() {
   const isSupplier = user?.role === "supplier";
 
   const [products, setProducts] = useState<CartProduct[]>([]);
+  const [brandProfile, setBrandProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedAnimation, setAddedAnimation] = useState<string | null>(null);
@@ -66,7 +67,14 @@ export default function BrandStorefrontPage() {
       }
     };
 
-    fetchProducts();
+          try {
+        const profileRes = await fetch(`${baseUrl}/api/brands/${encodeURIComponent(rawBrand)}`);
+        if (profileRes.ok) {
+          const prof = await profileRes.json();
+          setBrandProfile(prof);
+        }
+      } catch (err) {}
+      fetchProducts();
   }, [rawBrand]);
 
   const brandMoq = products[0]?.supplierMinimum || 50;

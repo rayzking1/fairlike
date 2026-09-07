@@ -18,6 +18,14 @@ class User(Base):
     address = Column(String, nullable=False)
     mol = Column(String, nullable=False)
     role = Column(String, default="retailer")
+    # Brand Story & Showcase Fields
+    bio = Column(Text, default="Официален производител и дистрибутор на бързооборотни стоки за търговски обекти.")
+    story = Column(Text, default="Нашата мисия е да предоставяме висококачествени артикули директно от производствената база до търговския рафт с гарантиран произход и оптимални срокове на годност.")
+    city = Column(String, default="гр. София")
+    cover_image_url = Column(Text, default="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1600&q=80")
+    lead_time_days = Column(String, default="24-48 часа")
+    brand_values = Column(String, default="Произведено в България,ЗДДС фактуриране,Директен транспорт")
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     products = relationship("Product", back_populates="owner")

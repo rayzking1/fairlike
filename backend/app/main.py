@@ -475,3 +475,38 @@ def get_order_invoice(order_id: str, db: Session = Depends(get_db)):
 @app.get("/api/orders/{order_id}/delivery-note")
 def get_order_delivery_note(order_id: str, db: Session = Depends(get_db)):
     return get_order_invoice(order_id, db)
+
+
+@app.get("/api/brands/{brand_name}")
+def get_brand_profile(brand_name: str, db: Session = Depends(get_db)):
+    clean_name = brand_name.strip().lower()
+    user = db.query(models.User).filter(
+        func.lower(models.User.company_name) == clean_name
+    ).first()
+
+    prods = db.query(models.Product).filter(
+        func.lower(models.Product.supplierName) == clean_name
+    ).all()
+
+    return {
+        "name": user.company_name if user else brand_name,
+        "bio": user.bio if user and user.bio else "Директен фабричен производител и вносител в OPTOM.BG.",
+        "story": user.story if user and user.story else "Производител с установени традиции в снабдяването на магазини и супермаркети.",
+        "city": user.city if user and user.city else "гр. София",
+        "cover_image_url": user.cover_image_url if user and user.cover_image_url else "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1600&q=80",
+        "lead_time_days": user.lead_time_days if user and user.lead_time_days else "24–48 часа",
+        "brand_values": (user.brand_values.split(",") if user and user.brand_values else ["Произведено в България", "Сертифицирано качество", "Директна дистрибуция"]),
+        "products_count": len(prods)
+    }
+
+@app.patch("/api/supplier/brand-profile")
+def update_brand_profile(payload: dict, current_user: Optional[models.User] = Depends(get_optional_user), db: Session = Depends(get_db)):
+    if not current_user or current_user.role != "supplier":
+        raise HTTPException(status_code=403, detail="Само доставчици могат да редактират профила на марката.")
+
+    for field in ["bio", "story", "city", "cover_image_url", "lead_time_days", "brand_values"]:
+        if field in payload:
+            setattr(current_user, field, payload[field])
+
+    db.commit()
+    return {"status": "success", "message": "Профилът на марката е обновен успешно!"}
