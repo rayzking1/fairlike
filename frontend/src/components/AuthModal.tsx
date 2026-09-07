@@ -60,7 +60,10 @@ export default function AuthModal() {
   }, [isAuthOpen]);
 
   const getApiBaseUrl = () => {
-    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+    const raw = process.env.NEXT_PUBLIC_API_URL;
+    if (raw && typeof raw === 'string' && raw.trim().startsWith('http')) {
+      return raw.trim().replace(/\/+$/, '');
+    }
     if (typeof window !== 'undefined') {
       const currentHost = window.location.hostname;
       if (currentHost.includes('-3000.app.github.dev')) {
