@@ -123,7 +123,7 @@ export default function SupplierDashboardPage() {
     const baseUrl = getApiBaseUrl();
     try {
       const [ordersRes, productsRes] = await Promise.all([
-        fetch(`${baseUrl}/api/orders`),
+        fetch(`${baseUrl}/api/orders`, { headers: { "Authorization": `Bearer ${localStorage.getItem("optom_b2b_token")}` } }),
         fetch(`${baseUrl}/api/products`)
       ]);
 
@@ -240,7 +240,7 @@ export default function SupplierDashboardPage() {
     try {
       await fetch(`${baseUrl}/api/products/${prodId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("optom_b2b_token")}` },
         body: JSON.stringify(editForm)
       });
 
@@ -261,7 +261,7 @@ export default function SupplierDashboardPage() {
     try {
       await fetch(`${baseUrl}/api/products/${prodId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("optom_b2b_token")}` },
         body: JSON.stringify({ inStock: nextStock })
       });
     } catch (e) {}
@@ -275,7 +275,7 @@ export default function SupplierDashboardPage() {
     if (!confirm("Сигурни ли сте, че искате да изтриете този артикул?")) return;
     const baseUrl = getApiBaseUrl();
     try {
-      await fetch(`${baseUrl}/api/products/${prodId}`, { method: "DELETE" });
+      await fetch(`${baseUrl}/api/products/${prodId}`, { method: "DELETE", headers: { "Authorization": `Bearer ${localStorage.getItem("optom_b2b_token")}` } });
     } catch (e) {}
     setProducts((prev) => prev.filter((p) => p.id !== prodId));
   };
@@ -287,7 +287,7 @@ export default function SupplierDashboardPage() {
       for (const prod of supplierProducts) {
         await fetch(`${baseUrl}/api/products/${prod.id}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("optom_b2b_token")}` },
           body: JSON.stringify({ supplierMinimum: brandMoq })
         });
       }
@@ -366,7 +366,7 @@ export default function SupplierDashboardPage() {
       try {
         const res = await fetch(`${baseUrl}/api/products`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("optom_b2b_token")}` },
           body: JSON.stringify(payload)
         });
         if (res.ok) successCount++;
@@ -399,7 +399,7 @@ export default function SupplierDashboardPage() {
     try {
       await fetch(`${baseUrl}/api/orders/${orderId}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("optom_b2b_token")}` },
         body: JSON.stringify({ status: newStatus })
       });
     } catch (e) {}
@@ -937,7 +937,7 @@ export default function SupplierDashboardPage() {
               try {
                 const res = await fetch(`${baseUrl}/api/products`, {
                   method: "POST",
-                  headers: { "Content-Type": "application/json" },
+                  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("optom_b2b_token")}` },
                   body: JSON.stringify(payload)
                 });
                 if (res.ok) {
